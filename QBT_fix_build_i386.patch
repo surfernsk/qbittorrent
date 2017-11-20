@@ -1,0 +1,11 @@
+--- qBittorrent-release-4.0.0/m4/ax_boost_base.m4
++++ qBittorrent-release-4.0.0/m4/ax_boost_base.m4
+@@ -121,7 +121,7 @@
+     dnl them priority over the other paths since, if libs are found there, they
+     dnl are almost assuredly the ones desired.
+     AS_CASE([${host_cpu}],
+-      [i?86],[multiarch_libsubdir="lib/i386-${host_os}"],
++      [i?86],[multiarch_libsubdir="lib lib/i386-${host_os}"],
+       [multiarch_libsubdir="lib/${host_cpu}-${host_os}"]
+     )
+ 
