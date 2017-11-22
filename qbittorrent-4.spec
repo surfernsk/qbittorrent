@@ -1,8 +1,8 @@
-%define gtag release-4.0.0
+%define gtag release-4.0.1
 
 Name: qbittorrent
 Summary:  A Bittorrent Client
-Version:  4.0.0
+Version:  4.0.1
 Epoch:    1
 Release:  1%{?dist}
 License:  GPLv2+
@@ -12,12 +12,12 @@ Source1:  qbittorrent-nox.README
 
 Patch0: QBT_fix_build_i386.patch
 
-BuildRequires: boost-devel >= 1.64
+BuildRequires: boost-devel >= 1.60
 BuildRequires: asio-devel
 BuildRequires: rb_libtorrent-devel >= 1.1.4
 BuildRequires: GeoIP-devel
 BuildRequires: fdupes
-BuildRequires: pkgconfig(Qt5Core) >= 5.9
+BuildRequires: pkgconfig(Qt5Core) >= 5.5
 BuildRequires: pkgconfig(Qt5Gui)
 BuildRequires: pkgconfig(Qt5Svg)
 BuildRequires: qt5-linguist
@@ -138,5 +138,8 @@ fi
 
 
 %changelog
+* Wed Nov 22 2017 Evgeny Lensky <surfernsk@gmail.com> - 4.0.1-1
+- release to 4.0.1
+
 * Mon Nov 20 2017 Evgeny Lensky <surfernsk@gmail.com> - 4.0.0-1
 - release to 4.0.0
