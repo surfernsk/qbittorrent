@@ -16,7 +16,6 @@ BuildRequires: boost-devel >= 1.60
 BuildRequires: asio-devel
 BuildRequires: rb_libtorrent-devel >= 1.1.4
 BuildRequires: GeoIP-devel
-BuildRequires: fdupes
 BuildRequires: pkgconfig(Qt5Core) >= 5.5
 BuildRequires: pkgconfig(Qt5Gui)
 BuildRequires: pkgconfig(Qt5Svg)
