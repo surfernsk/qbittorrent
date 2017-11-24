@@ -41,7 +41,7 @@ It aims to be as fast as possible and to provide multi-OS, unicode support.
 
 %prep
 %setup -q -n "qBittorrent-release-%{version}"
-%patch0 -p1 -b .test
+%patch0 -p1 -b .QBT_fix_build_i386
 ./bootstrap.sh
 cp -p %{SOURCE1} .
 
