@@ -1,4 +1,4 @@
 *.rpm
 *.tar.gz
 *.tar
-!/results_qbittorrent
+/results_*

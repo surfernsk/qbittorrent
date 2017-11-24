@@ -1,5 +1,3 @@
-%define gtag release-4.0.1
-
 Name: qbittorrent
 Summary:  A Bittorrent Client
 Version:  4.0.1
@@ -16,7 +14,7 @@ BuildRequires: boost-devel >= 1.60
 BuildRequires: asio-devel
 BuildRequires: rb_libtorrent-devel >= 1.1.4
 BuildRequires: GeoIP-devel
-BuildRequires: pkgconfig(Qt5Core) >= 5.5
+BuildRequires: pkgconfig(Qt5Core) >= 5.5.1
 BuildRequires: pkgconfig(Qt5Gui)
 BuildRequires: pkgconfig(Qt5Svg)
 BuildRequires: qt5-linguist
