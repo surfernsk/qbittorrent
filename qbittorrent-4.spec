@@ -2,7 +2,7 @@ Name: qbittorrent
 Summary:  A Bittorrent Client
 Version:  4.0.3
 Epoch:    1
-Release:  1%{?dist}
+Release:  2%{?dist}
 License:  GPLv2+
 URL:  http://sourceforge.net/projects/qbittorrent
 Source0:  https://github.com/qbittorrent/qBittorrent/archive/release-%{version}.tar.gz#/qBittorrent-release-%{version}.tar.gz
@@ -132,6 +132,9 @@ fi
 
 
 %changelog
+* Mon Jan 01 2018 Evgeny Lensky <surfernsk@gmail.com> - 4.0.3-2
+- rebuild with rb_libtorrent 1.1.6
+
 * Mon Dec 18 2017 Evgeny Lensky <surfernsk@gmail.com> - 4.0.3-1
 - release 4.0.3
 
