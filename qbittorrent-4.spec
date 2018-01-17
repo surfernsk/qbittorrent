@@ -2,11 +2,13 @@ Name: qbittorrent
 Summary:  A Bittorrent Client
 Version:  4.0.3
 Epoch:    1
-Release:  2%{?dist}
+Release:  3%{?dist}
 License:  GPLv2+
 URL:  http://sourceforge.net/projects/qbittorrent
 Source0:  https://github.com/qbittorrent/qBittorrent/archive/release-%{version}.tar.gz#/qBittorrent-release-%{version}.tar.gz
 Source1:  qbittorrent-nox.README
+
+Patch0:  f404.patch
 
 BuildRequires: boost-devel >= 1.60
 BuildRequires: asio-devel
@@ -39,6 +41,7 @@ It aims to be as fast as possible and to provide multi-OS, unicode support.
 
 %prep
 %setup -q -n "qBittorrent-release-%{version}"
+%patch0 -p1
 ./bootstrap.sh
 cp -p %{SOURCE1} .
 
@@ -132,6 +135,14 @@ fi
 
 
 %changelog
+* Wed Jan 17 2018 Evgeny Lensky <surfernsk@gmail.com> - 4.0.3-3
+- UpIssueFIX f4.0.4:
+- Fix natural sorting #8080 #6732.
+- Fix application of speed limits on LAN and μTP connections #7745.
+- Make peer information flags in peerlist more readable.
+- Simplify sorting code.
+- Fix sorting of country flags column in Peers tab.
+
 * Mon Jan 01 2018 Evgeny Lensky <surfernsk@gmail.com> - 4.0.3-2
 - rebuild with rb_libtorrent 1.1.6
 
