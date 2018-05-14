@@ -2,13 +2,13 @@ Name: qbittorrent
 Summary:  A Bittorrent Client
 Version:  4.1.0
 Epoch:    1
-Release:  1%{?dist}
+Release:  3%{?dist}
 License:  GPLv2+
 URL:  http://sourceforge.net/projects/qbittorrent
 Source0:  https://github.com/qbittorrent/qBittorrent/archive/release-%{version}.tar.gz#/qBittorrent-release-%{version}.tar.gz
 Source1:  qbittorrent-nox.README
 
-#Patch0:
+Patch0: QBT-Fix_o_dest_fold.patch
 
 BuildRequires: boost-devel >= 1.60
 BuildRequires: asio-devel
@@ -41,7 +41,7 @@ It aims to be as fast as possible and to provide multi-OS, unicode support.
 
 %prep
 %setup -q -n "qBittorrent-release-%{version}"
-#%patch0 -p1
+%patch0 -p1
 ./bootstrap.sh
 cp -p %{SOURCE1} .
 
@@ -135,8 +135,14 @@ fi
 
 
 %changelog
+* Mon May 14 2018 Evgeny Lensky <surfernsk@gmail.com> - 4.1.0-3
+- edit fix open dest folder with gnome >= 3.28
+
+* Mon May 14 2018 Evgeny Lensky <surfernsk@gmail.com> - 4.1.0-2
+- add fix open dest folder with gnome >= 3.28
+
 * Sat May 05 2018 Evgeny Lensky <surfernsk@gmail.com> - 4.1.0-1
-- release 4.1.0
+- bump 4.1.0
 
 * Fri Feb 16 2018 Evgeny Lensky <surfernsk@gmail.com> - 4.0.4-1
 - release 4.0.4
