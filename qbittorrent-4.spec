@@ -2,7 +2,7 @@ Name: qbittorrent
 Summary:  A Bittorrent Client
 Version:  4.1.0
 Epoch:    1
-Release:  3%{?dist}
+Release:  4%{?dist}
 License:  GPLv2+
 URL:  http://sourceforge.net/projects/qbittorrent
 Source0:  https://github.com/qbittorrent/qBittorrent/archive/release-%{version}.tar.gz#/qBittorrent-release-%{version}.tar.gz
@@ -135,6 +135,9 @@ fi
 
 
 %changelog
+* Mon May 14 2018 Evgeny Lensky <surfernsk@gmail.com> - 4.1.0-4
+- fix
+
 * Mon May 14 2018 Evgeny Lensky <surfernsk@gmail.com> - 4.1.0-3
 - edit fix open dest folder with gnome >= 3.28
 
