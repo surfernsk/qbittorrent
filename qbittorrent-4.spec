@@ -1,6 +1,6 @@
 Name: qbittorrent
 Summary:  A Bittorrent Client
-Version:  4.1.1
+Version:  4.1.2
 Epoch:    1
 Release:  1%{?dist}
 License:  GPLv2+
@@ -21,6 +21,8 @@ BuildRequires: qtsinglecoreapplication-qt5-devel
 BuildRequires: desktop-file-utils
 BuildRequires: automake
 
+Patch0:  qbittorrent-4_1_2-fix_desktop-git078325a.patch
+
 Requires: python3
 %{?_qt5_version:Requires: qt5-qtbase >= %{_qt5_version}}
 
@@ -39,6 +41,7 @@ It aims to be as fast as possible and to provide multi-OS, unicode support.
 
 %prep
 %setup -q -n "qBittorrent-release-%{version}"
+%patch0 -p1
 ./bootstrap.sh
 cp -p %{SOURCE1} .
 
@@ -132,6 +135,9 @@ fi
 
 
 %changelog
+* Mon Aug 13 2018 Evgeny Lensky <surfernsk@gmail.com> - 4.1.2-1
+- release 4.1.2
+
 * Tue Jun 05 2018 Evgeny Lensky <surfernsk@gmail.com> - 4.1.1-1
 - release 4.1.1
 
