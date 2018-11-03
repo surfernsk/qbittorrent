@@ -1,6 +1,6 @@
 Name: qbittorrent
 Summary:  A Bittorrent Client
-Version:  4.1.2
+Version:  4.1.3
 Epoch:    1
 Release:  1%{?dist}
 License:  GPLv2+
@@ -8,6 +8,7 @@ URL:  http://sourceforge.net/projects/qbittorrent
 Source0:  https://github.com/qbittorrent/qBittorrent/archive/release-%{version}.tar.gz#/qBittorrent-release-%{version}.tar.gz
 Source1:  qbittorrent-nox.README
 
+BuildRequires: systemd
 BuildRequires: boost-devel >= 1.60
 BuildRequires: asio-devel
 BuildRequires: rb_libtorrent-devel >= 1.1.4
@@ -21,7 +22,7 @@ BuildRequires: qtsinglecoreapplication-qt5-devel
 BuildRequires: desktop-file-utils
 BuildRequires: automake
 
-Patch0:  qbittorrent-4_1_2-fix_desktop-git078325a.patch
+Patch0:  qbittorrent-4_1_3-ut_style.patch
 
 Requires: python3
 %{?_qt5_version:Requires: qt5-qtbase >= %{_qt5_version}}
@@ -42,6 +43,7 @@ It aims to be as fast as possible and to provide multi-OS, unicode support.
 %prep
 %setup -q -n "qBittorrent-release-%{version}"
 %patch0 -p1
+
 ./bootstrap.sh
 cp -p %{SOURCE1} .
 
@@ -135,6 +137,12 @@ fi
 
 
 %changelog
+* Mon Aug 13 2018 Evgeny Lensky <surfernsk@gmail.com> - 4.1.3-1
+- release 4.1.3
+
+* Mon Aug 13 2018 Evgeny Lensky <surfernsk@gmail.com> - 4.1.2-2
+- fix
+
 * Mon Aug 13 2018 Evgeny Lensky <surfernsk@gmail.com> - 4.1.2-1
 - release 4.1.2
 
