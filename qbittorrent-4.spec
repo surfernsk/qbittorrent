@@ -2,7 +2,7 @@ Name: qbittorrent
 Summary:  A Bittorrent Client
 Version:  4.1.5
 Epoch:    1
-Release:  1%{?dist}
+Release:  2%{?dist}
 License:  GPLv2+
 URL:  http://sourceforge.net/projects/qbittorrent
 Source0:  https://github.com/qbittorrent/qBittorrent/archive/release-%{version}.tar.gz#/qBittorrent-release-%{version}.tar.gz
@@ -22,7 +22,7 @@ BuildRequires: qtsinglecoreapplication-qt5-devel
 BuildRequires: desktop-file-utils
 BuildRequires: automake
 
-Patch0:  qbittorrent-4_1_3-ut_style.patch
+Patch0:  qbittorrent-4_1_5-ut_style.patch
 
 Requires: python3
 %{?_qt5_version:Requires: qt5-qtbase >= %{_qt5_version}}
@@ -137,6 +137,9 @@ fi
 
 
 %changelog
+* Sun Feb 10 2019 Evgeny Lensky <surfernsk@gmail.com> - 4.1.5-2
+- update addtorrentui style patch
+
 * Fri Dec 28 2018 Evgeny Lensky <surfernsk@gmail.com> - 4.1.5-1
 - release 4.1.5
 

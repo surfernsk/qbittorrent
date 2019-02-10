@@ -1,5 +1,26 @@
+From 1857ac1e1c254b5928e0b6d79331c46669865c1f Mon Sep 17 00:00:00 2001
+From: Evgeny Lensky <surfernsk@gmail.com>
+Date: Sun, 10 Feb 2019 14:50:55 +0700
+Subject: [PATCH] 2
+
+---
+ src/gui/CMakeLists.txt          |   4 +
+ src/gui/addnewtorrentdialog.cpp |  65 +--
+ src/gui/addnewtorrentdialog.h   |   1 -
+ src/gui/addnewtorrentdialog.ui  | 967 ++++++++++++++++++++++----------
+ src/gui/checkboxwordwrap.cpp    |  95 ++++
+ src/gui/checkboxwordwrap.h      |  50 ++
+ src/gui/clickablelabel.cpp      |  24 +
+ src/gui/clickablelabel.h        |  27 +
+ src/gui/gui.pri                 |   4 +
+ 9 files changed, 873 insertions(+), 364 deletions(-)
+ create mode 100644 src/gui/checkboxwordwrap.cpp
+ create mode 100644 src/gui/checkboxwordwrap.h
+ create mode 100644 src/gui/clickablelabel.cpp
+ create mode 100644 src/gui/clickablelabel.h
+
 diff --git a/src/gui/CMakeLists.txt b/src/gui/CMakeLists.txt
-index b410d33c54..56155825b6 100644
+index b410d33..5615582 100644
 --- a/src/gui/CMakeLists.txt
 +++ b/src/gui/CMakeLists.txt
 @@ -20,6 +20,8 @@ banlistoptionsdialog.h
@@ -21,10 +42,10 @@ index b410d33c54..56155825b6 100644
  cookiesmodel.cpp
  downloadfromurldialog.cpp
 diff --git a/src/gui/addnewtorrentdialog.cpp b/src/gui/addnewtorrentdialog.cpp
-index 6b7e62943d..81e02cda5a 100644
+index 1322077..50c02ca 100644
 --- a/src/gui/addnewtorrentdialog.cpp
 +++ b/src/gui/addnewtorrentdialog.cpp
-@@ -58,6 +58,7 @@
+@@ -59,6 +59,7 @@
  #include "torrentcontentmodel.h"
  #include "ui_addnewtorrentdialog.h"
  #include "utils.h"
@@ -32,7 +53,7 @@ index 6b7e62943d..81e02cda5a 100644
  
  namespace
  {
-@@ -65,8 +66,7 @@ namespace
+@@ -66,8 +67,7 @@ namespace
      const QString KEY_ENABLED = SETTINGS_KEY("Enabled");
      const QString KEY_DEFAULTCATEGORY = SETTINGS_KEY("DefaultCategory");
      const QString KEY_TREEHEADERSTATE = SETTINGS_KEY("TreeHeaderState");
@@ -42,7 +63,7 @@ index 6b7e62943d..81e02cda5a 100644
      const QString KEY_TOPLEVEL = SETTINGS_KEY("TopLevel");
      const QString KEY_SAVEPATHHISTORY = SETTINGS_KEY("SavePathHistory");
      const QString KEY_SAVEPATHHISTORYLENGTH = SETTINGS_KEY("SavePathHistoryLength");
-@@ -150,8 +150,7 @@ AddNewTorrentDialog::AddNewTorrentDialog(const BitTorrent::AddTorrentParams &inP
+@@ -151,8 +151,7 @@ AddNewTorrentDialog::AddNewTorrentDialog(const BitTorrent::AddTorrentParams &inP
      m_ui->contentTreeView->header()->setSortIndicator(0, Qt::AscendingOrder);
      loadState();
      // Signal / slots
@@ -52,7 +73,7 @@ index 6b7e62943d..81e02cda5a 100644
      QShortcut *editHotkey = new QShortcut(Qt::Key_F2, m_ui->contentTreeView, nullptr, nullptr, Qt::WidgetShortcut);
      connect(editHotkey, &QShortcut::activated, this, &AddNewTorrentDialog::renameSelectedFile);
      connect(m_ui->contentTreeView, &QAbstractItemView::doubleClicked, this, &AddNewTorrentDialog::renameSelectedFile);
-@@ -209,21 +208,14 @@ void AddNewTorrentDialog::setSavePathHistoryLength(int value)
+@@ -210,21 +209,14 @@ void AddNewTorrentDialog::setSavePathHistoryLength(int value)
  void AddNewTorrentDialog::loadState()
  {
      m_headerState = settings()->loadValue(KEY_TREEHEADERSTATE).toByteArray();
@@ -76,7 +97,7 @@ index 6b7e62943d..81e02cda5a 100644
  }
  
  void AddNewTorrentDialog::show(QString source, const BitTorrent::AddTorrentParams &inParams, QWidget *parent)
-@@ -313,7 +305,7 @@ bool AddNewTorrentDialog::loadTorrent(const QString &torrentPath)
+@@ -314,7 +306,7 @@ bool AddNewTorrentDialog::loadTorrent(const QString &torrentPath)
          return false;
      }
  
@@ -85,7 +106,7 @@ index 6b7e62943d..81e02cda5a 100644
      setupTreeview();
      TMMChanged(m_ui->comboTTM->currentIndex());
      return true;
-@@ -358,7 +350,7 @@ bool AddNewTorrentDialog::loadMagnet(const BitTorrent::MagnetUri &magnetUri)
+@@ -359,7 +351,7 @@ bool AddNewTorrentDialog::loadMagnet(const BitTorrent::MagnetUri &magnetUri)
  
      BitTorrent::Session::instance()->loadMetadata(magnetUri);
      setMetadataProgressIndicator(true, tr("Retrieving metadata..."));
@@ -94,7 +115,7 @@ index 6b7e62943d..81e02cda5a 100644
  
      return true;
  }
-@@ -367,32 +359,10 @@ void AddNewTorrentDialog::showEvent(QShowEvent *event)
+@@ -368,32 +360,10 @@ void AddNewTorrentDialog::showEvent(QShowEvent *event)
  {
      QDialog::showEvent(event);
      if (!isTopLevel()) return;
@@ -127,7 +148,7 @@ index 6b7e62943d..81e02cda5a 100644
  void AddNewTorrentDialog::saveSavePathHistory() const
  {
      // Get current history
-@@ -446,7 +416,7 @@ void AddNewTorrentDialog::updateDiskSpaceLabel()
+@@ -447,7 +417,7 @@ void AddNewTorrentDialog::updateDiskSpaceLabel()
      sizeString += tr("Free space on disk: %1").arg(Utils::Misc::friendlyUnit(Utils::Fs::freeDiskSpaceOnPath(
                                                                     m_ui->savePath->selectedPath())));
      sizeString += ')';
@@ -136,7 +157,7 @@ index 6b7e62943d..81e02cda5a 100644
  }
  
  void AddNewTorrentDialog::onSavePathChanged(const QString &newPath)
-@@ -765,7 +735,6 @@ void AddNewTorrentDialog::setupTreeview()
+@@ -766,7 +736,6 @@ void AddNewTorrentDialog::setupTreeview()
      }
  
      updateDiskSpaceLabel();
@@ -144,7 +165,7 @@ index 6b7e62943d..81e02cda5a 100644
  }
  
  void AddNewTorrentDialog::handleDownloadFailed(const QString &url, const QString &reason)
-@@ -797,32 +766,24 @@ void AddNewTorrentDialog::TMMChanged(int index)
+@@ -798,32 +767,24 @@ void AddNewTorrentDialog::TMMChanged(int index)
  {
      if (index != 1) { // 0 is Manual mode and 1 is Automatic mode. Handle all non 1 values as manual mode.
          populateSavePathComboBox();
@@ -171,21 +192,22 @@ index 6b7e62943d..81e02cda5a 100644
  
  void AddNewTorrentDialog::setCommentText(const QString &str) const
  {
-     m_ui->commentLabel->setText(str);
+-    m_ui->commentLabel->setText(str);
 -
 -    // workaround for the additional space introduced by QScrollArea
 -    int lineHeight = m_ui->commentLabel->fontMetrics().lineSpacing();
 -    int lines = 1 + str.count('\n');
 -    int height = lineHeight * lines;
 -    m_ui->scrollArea->setMaximumHeight(height);
++    m_ui->commentText->setText(str);
  }
  
  void AddNewTorrentDialog::doNotDeleteTorrentClicked(bool checked)
 diff --git a/src/gui/addnewtorrentdialog.h b/src/gui/addnewtorrentdialog.h
-index e2636dfe12..4bfa7751d8 100644
+index e2636df..4bfa775 100644
 --- a/src/gui/addnewtorrentdialog.h
 +++ b/src/gui/addnewtorrentdialog.h
-@@ -72,7 +72,6 @@ class AddNewTorrentDialog : public QDialog
+@@ -72,7 +72,6 @@ public:
      static void show(QString source, QWidget *parent);
  
  private slots:
@@ -194,17 +216,17 @@ index e2636dfe12..4bfa7751d8 100644
      void updateDiskSpaceLabel();
      void onSavePathChanged(const QString &newPath);
 diff --git a/src/gui/addnewtorrentdialog.ui b/src/gui/addnewtorrentdialog.ui
-index 629f33909e..eddd36a2de 100644
+index 629f339..01acc57 100644
 --- a/src/gui/addnewtorrentdialog.ui
 +++ b/src/gui/addnewtorrentdialog.ui
-@@ -6,332 +6,816 @@
+@@ -6,336 +6,661 @@
     <rect>
      <x>0</x>
      <y>0</y>
 -    <width>414</width>
 -    <height>630</height>
-+    <width>936</width>
-+    <height>590</height>
++    <width>863</width>
++    <height>600</height>
     </rect>
    </property>
 +  <property name="sizePolicy">
@@ -287,9 +309,7 @@ index 629f33909e..eddd36a2de 100644
       </property>
 -     <property name="text">
 -      <string>Do not delete .torrent file</string>
-+     <property name="orientation">
-+      <enum>Qt::Horizontal</enum>
-      </property>
+-     </property>
 -    </widget>
 -   </item>
 -   <item>
@@ -303,7 +323,9 @@ index 629f33909e..eddd36a2de 100644
 -    <widget class="QToolButton" name="toolButtonAdvanced">
 -     <property name="text">
 -      <string notr="true">▼</string>
--     </property>
++     <property name="orientation">
++      <enum>Qt::Horizontal</enum>
+      </property>
 -     <property name="checkable">
 +     <property name="opaqueResize">
        <bool>true</bool>
@@ -353,11 +375,6 @@ index 629f33909e..eddd36a2de 100644
 +        <height>16777215</height>
 +       </size>
 +      </property>
-+      <property name="font">
-+       <font>
-+        <pointsize>10</pointsize>
-+       </font>
-+      </property>
 +      <layout class="QVBoxLayout" name="mainlayout_addui">
 +       <property name="spacing">
 +        <number>4</number>
@@ -379,11 +396,6 @@ index 629f33909e..eddd36a2de 100644
 +       </property>
 +       <item>
 +        <widget class="QGroupBox" name="groupBoxSavePath">
-+         <property name="font">
-+          <font>
-+           <pointsize>10</pointsize>
-+          </font>
-+         </property>
 +         <property name="title">
 +          <string>Save at</string>
 +         </property>
@@ -589,11 +601,6 @@ index 629f33909e..eddd36a2de 100644
 +            </property>
 +            <item>
 +             <widget class="QLabel" name="labelTorrentManagementMode">
-+              <property name="font">
-+               <font>
-+                <pointsize>10</pointsize>
-+               </font>
-+              </property>
 +              <property name="text">
 +               <string>Torrent Management Mode:</string>
 +              </property>
@@ -601,11 +608,6 @@ index 629f33909e..eddd36a2de 100644
 +            </item>
 +            <item>
 +             <widget class="QComboBox" name="comboTTM">
-+              <property name="font">
-+               <font>
-+                <pointsize>10</pointsize>
-+               </font>
-+              </property>
 +              <property name="toolTip">
 +               <string>Automatic mode means that various torrent properties(eg save path) will be decided by the associated category</string>
 +              </property>
@@ -623,11 +625,6 @@ index 629f33909e..eddd36a2de 100644
 +            </item>
 +            <item>
 +             <spacer name="horizontalSpacer">
-+              <property name="font">
-+               <font>
-+                <pointsize>10</pointsize>
-+               </font>
-+              </property>
 +              <property name="orientation">
 +               <enum>Qt::Horizontal</enum>
 +              </property>
@@ -642,8 +639,40 @@ index 629f33909e..eddd36a2de 100644
 +              </property>
 +             </spacer>
 +            </item>
++           </layout>
++          </item>
++          <item>
++           <widget class="FileSystemPathComboEdit" name="savePath" native="true">
++            <property name="sizePolicy">
++             <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
++              <horstretch>0</horstretch>
++              <verstretch>0</verstretch>
++             </sizepolicy>
++            </property>
++           </widget>
++          </item>
++          <item>
++           <layout class="QHBoxLayout" name="rememberPathLayout">
++            <property name="leftMargin">
++             <number>0</number>
++            </property>
++            <property name="topMargin">
++             <number>3</number>
++            </property>
++            <property name="rightMargin">
++             <number>6</number>
++            </property>
++            <property name="bottomMargin">
++             <number>3</number>
++            </property>
 +            <item>
 +             <widget class="CheckBoxWordWrap" name="createSubfolderCheckBox">
++              <property name="sizePolicy">
++               <sizepolicy hsizetype="Expanding" vsizetype="Minimum">
++                <horstretch>1</horstretch>
++                <verstretch>0</verstretch>
++               </sizepolicy>
++              </property>
 +              <property name="minimumSize">
 +               <size>
 +                <width>200</width>
@@ -667,39 +696,14 @@ index 629f33909e..eddd36a2de 100644
 +              </property>
 +             </widget>
 +            </item>
-+           </layout>
-+          </item>
-+          <item>
-+           <widget class="FileSystemPathComboEdit" name="savePath" native="true">
-+            <property name="sizePolicy">
-+             <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-+              <horstretch>0</horstretch>
-+              <verstretch>0</verstretch>
-+             </sizepolicy>
-+            </property>
-+            <property name="font">
-+             <font>
-+              <pointsize>10</pointsize>
-+             </font>
-+            </property>
-+           </widget>
-+          </item>
-+          <item>
-+           <layout class="QHBoxLayout" name="rememberPathLayout">
-+            <property name="leftMargin">
-+             <number>0</number>
-+            </property>
-+            <property name="topMargin">
-+             <number>3</number>
-+            </property>
-+            <property name="rightMargin">
-+             <number>6</number>
-+            </property>
-+            <property name="bottomMargin">
-+             <number>3</number>
-+            </property>
 +            <item>
 +             <widget class="CheckBoxWordWrap" name="checkBoxRememberLastSavePath">
++              <property name="sizePolicy">
++               <sizepolicy hsizetype="Expanding" vsizetype="Minimum">
++                <horstretch>1</horstretch>
++                <verstretch>0</verstretch>
++               </sizepolicy>
++              </property>
 +              <property name="styleSheet">
 +               <string notr="true">font: 10pt &quot;Cantarell&quot;;</string>
 +              </property>
@@ -715,15 +719,10 @@ index 629f33909e..eddd36a2de 100644
 +       </item>
 +       <item>
 +        <widget class="QGroupBox" name="groupBoxSettings">
-+         <property name="font">
-+          <font>
-+           <pointsize>10</pointsize>
-+          </font>
-          </property>
--         <layout class="QVBoxLayout" name="verticalLayout">
 +         <property name="title">
 +          <string>Torrent settings</string>
-+         </property>
+          </property>
+-         <layout class="QVBoxLayout" name="verticalLayout">
 +         <layout class="QVBoxLayout" name="verticalLayout_3">
 +          <property name="spacing">
 +           <number>6</number>
@@ -764,11 +763,6 @@ index 629f33909e..eddd36a2de 100644
 +                <verstretch>0</verstretch>
 +               </sizepolicy>
 +              </property>
-+              <property name="font">
-+               <font>
-+                <pointsize>10</pointsize>
-+               </font>
-+              </property>
 +              <property name="text">
 +               <string>Category:</string>
 +              </property>
@@ -794,11 +788,6 @@ index 629f33909e..eddd36a2de 100644
 +                <height>0</height>
 +               </size>
 +              </property>
-+              <property name="font">
-+               <font>
-+                <pointsize>11</pointsize>
-+               </font>
-+              </property>
 +              <property name="editable">
 +               <bool>true</bool>
 +              </property>
@@ -820,12 +809,6 @@ index 629f33909e..eddd36a2de 100644
 +                <width>250</width>
 +                <height>0</height>
 +               </size>
-+              </property>
-+              <property name="font">
-+               <font>
-+                <pointsize>10</pointsize>
-+                <kerning>true</kerning>
-+               </font>
 +              </property>
 +              <property name="mouseTracking">
 +               <bool>true</bool>
@@ -903,15 +886,6 @@ index 629f33909e..eddd36a2de 100644
 +                <verstretch>0</verstretch>
 +               </sizepolicy>
 +              </property>
-+              <property name="font">
-+               <font>
-+                <family>Cantarell</family>
-+                <pointsize>10</pointsize>
-+                <weight>50</weight>
-+                <italic>false</italic>
-+                <bold>false</bold>
-+               </font>
-+              </property>
 +              <property name="styleSheet">
 +               <string notr="true">font: 10pt &quot;Cantarell&quot;;</string>
 +              </property>
@@ -972,15 +946,10 @@ index 629f33909e..eddd36a2de 100644
 +       <item>
 +        <widget class="QGroupBox" name="infoGroup">
 +         <property name="sizePolicy">
-+          <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
++          <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
 +           <horstretch>0</horstretch>
 +           <verstretch>0</verstretch>
 +          </sizepolicy>
-+         </property>
-+         <property name="font">
-+          <font>
-+           <pointsize>10</pointsize>
-+          </font>
 +         </property>
 +         <property name="title">
 +          <string>Torrent information</string>
@@ -989,18 +958,13 @@ index 629f33909e..eddd36a2de 100644
 +          <bool>false</bool>
 +         </property>
 +         <layout class="QGridLayout" name="gridLayout_2">
-+          <item row="3" column="1">
++          <item row="4" column="1">
 +           <widget class="QLabel" name="labelSizeData">
 +            <property name="sizePolicy">
 +             <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
 +              <horstretch>0</horstretch>
 +              <verstretch>0</verstretch>
 +             </sizepolicy>
-+            </property>
-+            <property name="font">
-+             <font>
-+              <pointsize>10</pointsize>
-+             </font>
 +            </property>
 +            <property name="frameShape">
 +             <enum>QFrame::NoFrame</enum>
@@ -1010,7 +974,7 @@ index 629f33909e..eddd36a2de 100644
 +            </property>
 +           </widget>
 +          </item>
-+          <item row="4" column="0">
++          <item row="5" column="0">
 +           <widget class="QLabel" name="labelHash">
 +            <property name="sizePolicy">
 +             <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
@@ -1018,17 +982,12 @@ index 629f33909e..eddd36a2de 100644
 +              <verstretch>0</verstretch>
 +             </sizepolicy>
 +            </property>
-+            <property name="font">
-+             <font>
-+              <pointsize>10</pointsize>
-+             </font>
-+            </property>
 +            <property name="text">
 +             <string>Hash:</string>
 +            </property>
 +           </widget>
 +          </item>
-+          <item row="3" column="0">
++          <item row="4" column="0">
 +           <widget class="QLabel" name="labelSize">
 +            <property name="sizePolicy">
 +             <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
@@ -1036,28 +995,18 @@ index 629f33909e..eddd36a2de 100644
 +              <verstretch>0</verstretch>
 +             </sizepolicy>
 +            </property>
-+            <property name="font">
-+             <font>
-+              <pointsize>10</pointsize>
-+             </font>
-+            </property>
 +            <property name="text">
 +             <string>Size:</string>
 +            </property>
 +           </widget>
 +          </item>
-+          <item row="2" column="1">
++          <item row="3" column="1">
 +           <widget class="QLabel" name="labelDate">
 +            <property name="sizePolicy">
 +             <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
 +              <horstretch>0</horstretch>
 +              <verstretch>0</verstretch>
 +             </sizepolicy>
-+            </property>
-+            <property name="font">
-+             <font>
-+              <pointsize>10</pointsize>
-+             </font>
 +            </property>
 +            <property name="frameShape">
 +             <enum>QFrame::NoFrame</enum>
@@ -1073,18 +1022,13 @@ index 629f33909e..eddd36a2de 100644
 +            </property>
 +           </widget>
 +          </item>
-+          <item row="4" column="1">
++          <item row="5" column="1">
 +           <widget class="QLabel" name="labelHashData">
 +            <property name="sizePolicy">
 +             <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
 +              <horstretch>0</horstretch>
 +              <verstretch>0</verstretch>
 +             </sizepolicy>
-+            </property>
-+            <property name="font">
-+             <font>
-+              <pointsize>10</pointsize>
-+             </font>
 +            </property>
 +            <property name="frameShape">
 +             <enum>QFrame::NoFrame</enum>
@@ -1101,7 +1045,7 @@ index 629f33909e..eddd36a2de 100644
 +            </property>
 +           </widget>
 +          </item>
-+          <item row="2" column="0">
++          <item row="3" column="0">
 +           <widget class="QLabel" name="labelDatedata">
 +            <property name="sizePolicy">
 +             <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
@@ -1109,28 +1053,18 @@ index 629f33909e..eddd36a2de 100644
 +              <verstretch>0</verstretch>
 +             </sizepolicy>
 +            </property>
-+            <property name="font">
-+             <font>
-+              <pointsize>10</pointsize>
-+             </font>
-+            </property>
 +            <property name="text">
 +             <string>Date:</string>
 +            </property>
 +           </widget>
 +          </item>
-+          <item row="5" column="0">
++          <item row="6" column="0">
 +           <widget class="QLabel" name="labelComment">
 +            <property name="sizePolicy">
-+             <sizepolicy hsizetype="Preferred" vsizetype="Ignored">
++             <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
 +              <horstretch>0</horstretch>
 +              <verstretch>0</verstretch>
 +             </sizepolicy>
-+            </property>
-+            <property name="font">
-+             <font>
-+              <pointsize>10</pointsize>
-+             </font>
 +            </property>
 +            <property name="text">
 +             <string>Comment:</string>
@@ -1145,122 +1079,26 @@ index 629f33909e..eddd36a2de 100644
 -             <bool>true</bool>
 +           </widget>
 +          </item>
-+          <item row="5" column="1">
-+           <widget class="QScrollArea" name="labelCommentScroll">
++          <item row="6" column="1">
++           <widget class="QTextBrowser" name="commentText">
 +            <property name="sizePolicy">
-+             <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
++             <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
 +              <horstretch>0</horstretch>
 +              <verstretch>0</verstretch>
 +             </sizepolicy>
-             </property>
--            <property name="openExternalLinks">
--             <bool>true</bool>
-+            <property name="minimumSize">
-+             <size>
-+              <width>0</width>
-+              <height>0</height>
-+             </size>
-             </property>
--            <property name="textInteractionFlags">
--             <set>Qt::TextBrowserInteraction</set>
-+            <property name="font">
-+             <font>
-+              <pointsize>10</pointsize>
-+             </font>
++            </property>
++            <property name="styleSheet">
++             <string notr="true">background-color: rgba(0, 0, 0, 0);</string>
 +            </property>
 +            <property name="frameShape">
 +             <enum>QFrame::NoFrame</enum>
              </property>
-+            <property name="horizontalScrollBarPolicy">
-+             <enum>Qt::ScrollBarAlwaysOff</enum>
-+            </property>
-+            <property name="sizeAdjustPolicy">
-+             <enum>QAbstractScrollArea::AdjustToContents</enum>
-+            </property>
-+            <property name="widgetResizable">
-+             <bool>true</bool>
-+            </property>
-+            <widget class="QWidget" name="scrollAreaWidgetContents">
-+             <property name="geometry">
-+              <rect>
-+               <x>0</x>
-+               <y>0</y>
-+               <width>457</width>
-+               <height>138</height>
-+              </rect>
-+             </property>
-+             <property name="sizePolicy">
-+              <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-+               <horstretch>0</horstretch>
-+               <verstretch>0</verstretch>
-+              </sizepolicy>
-+             </property>
-+             <property name="minimumSize">
-+              <size>
-+               <width>0</width>
-+               <height>0</height>
-+              </size>
-+             </property>
-+             <layout class="QHBoxLayout" name="horizontalLayout_2">
-+              <property name="spacing">
-+               <number>0</number>
-+              </property>
-+              <property name="sizeConstraint">
-+               <enum>QLayout::SetNoConstraint</enum>
-+              </property>
-+              <property name="leftMargin">
-+               <number>0</number>
-+              </property>
-+              <property name="topMargin">
-+               <number>0</number>
-+              </property>
-+              <property name="rightMargin">
-+               <number>0</number>
-+              </property>
-+              <property name="bottomMargin">
-+               <number>0</number>
-+              </property>
-+              <item>
-+               <widget class="QLabel" name="commentLabel">
-+                <property name="sizePolicy">
-+                 <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-+                  <horstretch>0</horstretch>
-+                  <verstretch>0</verstretch>
-+                 </sizepolicy>
-+                </property>
-+                <property name="minimumSize">
-+                 <size>
-+                  <width>0</width>
-+                  <height>0</height>
-+                 </size>
-+                </property>
-+                <property name="font">
-+                 <font>
-+                  <pointsize>10</pointsize>
-+                 </font>
-+                </property>
-+                <property name="text">
-+                 <string/>
-+                </property>
-+                <property name="textFormat">
-+                 <enum>Qt::RichText</enum>
-+                </property>
-+                <property name="alignment">
-+                 <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
-+                </property>
-+                <property name="wordWrap">
-+                 <bool>true</bool>
-+                </property>
-+                <property name="openExternalLinks">
-+                 <bool>true</bool>
-+                </property>
-+                <property name="textInteractionFlags">
-+                 <set>Qt::TextBrowserInteraction</set>
-+                </property>
-+               </widget>
-+              </item>
-+             </layout>
-+            </widget>
+             <property name="openExternalLinks">
+              <bool>true</bool>
+             </property>
+-            <property name="textInteractionFlags">
+-             <set>Qt::TextBrowserInteraction</set>
+-            </property>
             </widget>
            </item>
           </layout>
@@ -1284,11 +1122,6 @@ index 629f33909e..eddd36a2de 100644
 +        <height>0</height>
 +       </size>
 +      </property>
-+      <property name="font">
-+       <font>
-+        <pointsize>10</pointsize>
-+       </font>
-+      </property>
 +      <property name="contextMenuPolicy">
 +       <enum>Qt::CustomContextMenu</enum>
 +      </property>
@@ -1302,19 +1135,7 @@ index 629f33909e..eddd36a2de 100644
      </widget>
     </item>
     <item>
-@@ -359,10 +843,40 @@
-       </widget>
-      </item>
-      <item>
--      <widget class="QLabel" name="lblMetaLoading"/>
-+      <widget class="QLabel" name="lblMetaLoading">
-+       <property name="font">
-+        <font>
-+         <pointsize>10</pointsize>
-+        </font>
-+       </property>
-+      </widget>
-+     </item>
+     <layout class="QHBoxLayout" name="buttonsHLayout">
 +     <item>
 +      <widget class="QCheckBox" name="checkBoxNeverShow">
 +       <property name="sizePolicy">
@@ -1327,6 +1148,48 @@ index 629f33909e..eddd36a2de 100644
 +        <string>Never show again</string>
 +       </property>
 +      </widget>
++     </item>
++     <item>
++      <spacer name="horizontalSpacer_2">
++       <property name="orientation">
++        <enum>Qt::Horizontal</enum>
++       </property>
++       <property name="sizeType">
++        <enum>QSizePolicy::Preferred</enum>
++       </property>
++       <property name="sizeHint" stdset="0">
++        <size>
++         <width>40</width>
++         <height>20</height>
++        </size>
++       </property>
++      </spacer>
++     </item>
+      <item>
+       <widget class="QProgressBar" name="progMetaLoading">
+        <property name="sizePolicy">
+@@ -358,11 +683,33 @@
+        </property>
+       </widget>
+      </item>
++     <item>
++      <spacer name="horizontalSpacer_3">
++       <property name="orientation">
++        <enum>Qt::Horizontal</enum>
++       </property>
++       <property name="sizeType">
++        <enum>QSizePolicy::Expanding</enum>
++       </property>
++       <property name="sizeHint" stdset="0">
++        <size>
++         <width>40</width>
++         <height>20</height>
++        </size>
++       </property>
++      </spacer>
++     </item>
+      <item>
+       <widget class="QLabel" name="lblMetaLoading"/>
       </item>
       <item>
        <widget class="QDialogButtonBox" name="buttonBox">
@@ -1336,15 +1199,10 @@ index 629f33909e..eddd36a2de 100644
 +         <verstretch>0</verstretch>
 +        </sizepolicy>
 +       </property>
-+       <property name="font">
-+        <font>
-+         <pointsize>10</pointsize>
-+        </font>
-+       </property>
         <property name="standardButtons">
          <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
         </property>
-@@ -393,6 +907,11 @@
+@@ -393,6 +740,11 @@
    </action>
   </widget>
   <customwidgets>
@@ -1356,7 +1214,7 @@ index 629f33909e..eddd36a2de 100644
    <customwidget>
     <class>TorrentContentTreeView</class>
     <extends>QTreeView</extends>
-@@ -406,16 +925,11 @@
+@@ -406,15 +758,8 @@
    </customwidget>
   </customwidgets>
   <tabstops>
@@ -1370,35 +1228,32 @@ index 629f33909e..eddd36a2de 100644
    <tabstop>categoryComboBox</tabstop>
 -  <tabstop>defaultCategoryCheckbox</tabstop>
 -  <tabstop>scrollArea</tabstop>
-+  <tabstop>labelCommentScroll</tabstop>
    <tabstop>contentTreeView</tabstop>
-+  <tabstop>checkBoxNeverShow</tabstop>
   </tabstops>
   <resources/>
-  <connections>
-@@ -426,8 +940,8 @@
+@@ -426,8 +771,8 @@
     <slot>accept()</slot>
     <hints>
      <hint type="sourcelabel">
 -     <x>403</x>
 -     <y>579</y>
-+     <x>777</x>
-+     <y>490</y>
++     <x>928</x>
++     <y>855</y>
      </hint>
      <hint type="destinationlabel">
       <x>157</x>
-@@ -442,8 +956,8 @@
+@@ -442,8 +787,8 @@
     <slot>reject()</slot>
     <hints>
      <hint type="sourcelabel">
 -     <x>403</x>
 -     <y>579</y>
-+     <x>777</x>
-+     <y>490</y>
++     <x>928</x>
++     <y>855</y>
      </hint>
      <hint type="destinationlabel">
       <x>286</x>
-@@ -452,34 +966,34 @@
+@@ -452,34 +797,34 @@
     </hints>
    </connection>
    <connection>
@@ -1434,8 +1289,8 @@ index 629f33909e..eddd36a2de 100644
      <hint type="sourcelabel">
 -     <x>200</x>
 -     <y>19</y>
-+     <x>233</x>
-+     <y>171</y>
++     <x>266</x>
++     <y>231</y>
      </hint>
      <hint type="destinationlabel">
 -     <x>206</x>
@@ -1447,7 +1302,7 @@ index 629f33909e..eddd36a2de 100644
    </connection>
 diff --git a/src/gui/checkboxwordwrap.cpp b/src/gui/checkboxwordwrap.cpp
 new file mode 100644
-index 0000000000..70bec4e990
+index 0000000..70bec4e
 --- /dev/null
 +++ b/src/gui/checkboxwordwrap.cpp
 @@ -0,0 +1,95 @@
@@ -1548,7 +1403,7 @@ index 0000000000..70bec4e990
 +}
 diff --git a/src/gui/checkboxwordwrap.h b/src/gui/checkboxwordwrap.h
 new file mode 100644
-index 0000000000..1837085465
+index 0000000..1837085
 --- /dev/null
 +++ b/src/gui/checkboxwordwrap.h
 @@ -0,0 +1,50 @@
@@ -1604,7 +1459,7 @@ index 0000000000..1837085465
 +#endif
 diff --git a/src/gui/clickablelabel.cpp b/src/gui/clickablelabel.cpp
 new file mode 100644
-index 0000000000..6f8d47f1b8
+index 0000000..6f8d47f
 --- /dev/null
 +++ b/src/gui/clickablelabel.cpp
 @@ -0,0 +1,24 @@
@@ -1634,7 +1489,7 @@ index 0000000000..6f8d47f1b8
 +}
 diff --git a/src/gui/clickablelabel.h b/src/gui/clickablelabel.h
 new file mode 100644
-index 0000000000..c3ee22b86b
+index 0000000..c3ee22b
 --- /dev/null
 +++ b/src/gui/clickablelabel.h
 @@ -0,0 +1,27 @@
@@ -1666,7 +1521,7 @@ index 0000000000..c3ee22b86b
 +
 +#endif // CLICKABLELABEL_H
 diff --git a/src/gui/gui.pri b/src/gui/gui.pri
-index 603bbf1051..c0bb0c2708 100644
+index 603bbf1..c0bb0c2 100644
 --- a/src/gui/gui.pri
 +++ b/src/gui/gui.pri
 @@ -13,6 +13,8 @@ HEADERS += \
@@ -1687,3 +1542,6 @@ index 603bbf1051..c0bb0c2708 100644
      $$PWD/cookiesdialog.cpp \
      $$PWD/cookiesmodel.cpp \
      $$PWD/downloadfromurldialog.cpp \
+-- 
+2.20.1
+
