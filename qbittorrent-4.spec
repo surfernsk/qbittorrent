@@ -1,8 +1,8 @@
 Name: qbittorrent
 Summary:  A Bittorrent Client
-Version:  4.1.5
+Version:  4.1.6
 Epoch:    1
-Release:  2%{?dist}
+Release:  1%{?dist}
 License:  GPLv2+
 URL:  http://sourceforge.net/projects/qbittorrent
 Source0:  https://github.com/qbittorrent/qBittorrent/archive/release-%{version}.tar.gz#/qBittorrent-release-%{version}.tar.gz
@@ -20,9 +20,10 @@ BuildRequires: qt5-linguist
 BuildRequires: qtsingleapplication-qt5-devel
 BuildRequires: qtsinglecoreapplication-qt5-devel
 BuildRequires: desktop-file-utils
+BuildRequires: libappstream-glib
 BuildRequires: automake
 
-Patch0:  qbittorrent-4_1_5-ut_style.patch
+Patch0:  qbittorrent-10615.patch
 
 Requires: python3
 %{?_qt5_version:Requires: qt5-qtbase >= %{_qt5_version}}
@@ -46,6 +47,7 @@ It aims to be as fast as possible and to provide multi-OS, unicode support.
 
 ./bootstrap.sh
 cp -p %{SOURCE1} .
+sed -i -e 's@Exec=qbittorrent %U@Exec=env TMPDIR=/var/tmp qbittorrent %U@g' dist/unix/org.qbittorrent.qBittorrent.desktop
 
 %build
 # use ./configure instead of %%configure as it doesn't work
@@ -91,6 +93,12 @@ mv -f conf.pri.gui conf.pri
 cd build-gui
 make INSTALL_ROOT=%{buildroot} install
 
+desktop-file-install \
+  --dir=%{buildroot}%{_datadir}/applications/ \
+  %{buildroot}%{_datadir}/applications/org.qbittorrent.qBittorrent.desktop
+
+appstream-util validate-relax --nonet %{buildroot}%{_metainfodir}/org.qbittorrent.qBittorrent.appdata.xml
+
 %post nox
 %systemd_post %{name}-nox@.service
 
@@ -120,8 +128,8 @@ fi
 %doc AUTHORS Changelog COPYING NEWS README.md TODO
 %doc %{_mandir}/man1/%{name}.1.gz
 %{_bindir}/qbittorrent
-%{_datadir}/applications/qbittorrent.desktop
-%{_datadir}/appdata/qbittorrent.appdata.xml
+%{_metainfodir}/org.qbittorrent.qBittorrent.appdata.xml
+%{_datadir}/applications/org.qbittorrent.qBittorrent.desktop
 %{_datadir}/icons/hicolor/*/apps/qbittorrent.png
 %{_datadir}/icons/hicolor/*/status/qbittorrent-tray.png
 %{_datadir}/icons/hicolor/*/status/qbittorrent-tray-dark.svg
@@ -137,6 +145,10 @@ fi
 
 
 %changelog
+* Sat Jun 01 2019 Evgeny Lensky <surfernsk@gmail.com> - 4.1.6-1
+- release 4.1.6
+- update addtorrentui style patch
+
 * Sun Feb 10 2019 Evgeny Lensky <surfernsk@gmail.com> - 4.1.5-2
 - update addtorrentui style patch
 

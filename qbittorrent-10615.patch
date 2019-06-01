@@ -1,0 +1,1562 @@
+diff --git a/src/base/bittorrent/torrentinfo.cpp b/src/base/bittorrent/torrentinfo.cpp
+index ca121ab203..ab25782c65 100644
+--- a/src/base/bittorrent/torrentinfo.cpp
++++ b/src/base/bittorrent/torrentinfo.cpp
+@@ -340,8 +340,13 @@ TorrentInfo::PieceRange TorrentInfo::filePieces(int fileIndex) const
+     const libt::file_storage &files = nativeInfo()->files();
+     const auto fileSize = files.file_size(fileIndex);
+     const auto fileOffset = files.file_offset(fileIndex);
+-    return makeInterval(static_cast<int>(fileOffset / pieceLength()),
+-                        static_cast<int>((fileOffset + fileSize - 1) / pieceLength()));
++
++    const int beginIdx = (fileOffset / pieceLength());
++    const int endIdx = ((fileOffset + fileSize - 1) / pieceLength());
++
++    if (fileSize <= 0)
++        return {beginIdx, 0};
++    return makeInterval(beginIdx, endIdx);
+ }
+ 
+ void TorrentInfo::renameFile(const int index, const QString &newPath)
+diff --git a/src/base/bittorrent/tracker.cpp b/src/base/bittorrent/tracker.cpp
+index 1e51a857e1..ffe04af560 100644
+--- a/src/base/bittorrent/tracker.cpp
++++ b/src/base/bittorrent/tracker.cpp
+@@ -29,16 +29,11 @@
+ 
+ #include "tracker.h"
+ 
+-#include <vector>
+-
+ #include <libtorrent/bencode.hpp>
+ #include <libtorrent/entry.hpp>
+ 
+-#include "base/global.h"
+ #include "base/http/server.h"
+ #include "base/preferences.h"
+-#include "base/utils/bytearray.h"
+-#include "base/utils/string.h"
+ 
+ // static limits
+ static const int MAX_TORRENTS = 100;
+@@ -133,21 +128,7 @@ Http::Response Tracker::processRequest(const Http::Request &request, const Http:
+ 
+ void Tracker::respondToAnnounceRequest()
+ {
+-    QMap<QString, QByteArray> queryParams;
+-    // Parse GET parameters
+-    using namespace Utils::ByteArray;
+-    for (const QByteArray &param : asConst(splitToViews(m_request.query, "&"))) {
+-        const int sepPos = param.indexOf('=');
+-        if (sepPos <= 0) continue; // ignores params without name
+-
+-        const QByteArray nameComponent = midView(param, 0, sepPos);
+-        const QByteArray valueComponent = midView(param, (sepPos + 1));
+-
+-        const QString paramName = QString::fromUtf8(QByteArray::fromPercentEncoding(nameComponent));
+-        const QByteArray paramValue = QByteArray::fromPercentEncoding(valueComponent);
+-        queryParams[paramName] = paramValue;
+-    }
+-
++    const QMap<QString, QByteArray> &queryParams = m_request.query;
+     TrackerAnnounceRequest announceReq;
+ 
+     // IP
+diff --git a/src/base/bittorrent/tracker.h b/src/base/bittorrent/tracker.h
+index 09075676d5..02e799908f 100644
+--- a/src/base/bittorrent/tracker.h
++++ b/src/base/bittorrent/tracker.h
+@@ -36,7 +36,6 @@
+ 
+ #include "base/http/irequesthandler.h"
+ #include "base/http/responsebuilder.h"
+-#include "base/http/types.h"
+ 
+ namespace libtorrent
+ {
+diff --git a/src/base/http/requestparser.cpp b/src/base/http/requestparser.cpp
+index 69d2a2cdce..101a7a48bd 100644
+--- a/src/base/http/requestparser.cpp
++++ b/src/base/http/requestparser.cpp
+@@ -36,6 +36,7 @@
+ #include <QUrl>
+ #include <QUrlQuery>
+ 
++#include "base/global.h"
+ #include "base/utils/bytearray.h"
+ #include "base/utils/string.h"
+ 
+@@ -180,14 +181,29 @@ bool RequestParser::parseRequestLine(const QString &line)
+     m_request.method = match.captured(1);
+ 
+     // Request Target
+-    // URL components should be separated before percent-decoding
+-    // [rfc3986] 2.4 When to Encode or Decode
+     const QByteArray url {match.captured(2).toLatin1()};
+     const int sepPos = url.indexOf('?');
+-    const QByteArray pathComponent = ((sepPos == -1) ? url : Utils::ByteArray::midView(url, 0, sepPos));
++    const QByteArray pathComponent = ((sepPos == -1) ? url : midView(url, 0, sepPos));
++
+     m_request.path = QString::fromUtf8(QByteArray::fromPercentEncoding(pathComponent));
+-    if (sepPos >= 0)
+-        m_request.query = url.mid(sepPos + 1);
++
++    if (sepPos >= 0) {
++        const QByteArray query = midView(url, (sepPos + 1));
++
++        // [rfc3986] 2.4 When to Encode or Decode
++        // URL components should be separated before percent-decoding
++        for (const QByteArray &param : asConst(splitToViews(query, "&"))) {
++            const int eqCharPos = param.indexOf('=');
++            if (eqCharPos <= 0) continue;  // ignores params without name
++
++            const QByteArray nameComponent = midView(param, 0, eqCharPos);
++            const QByteArray valueComponent = midView(param, (eqCharPos + 1));
++            const QString paramName = QString::fromUtf8(QByteArray::fromPercentEncoding(nameComponent).replace('+', ' '));
++            const QByteArray paramValue = QByteArray::fromPercentEncoding(valueComponent).replace('+', ' ');
++
++            m_request.query[paramName] = paramValue;
++        }
++    }
+ 
+     // HTTP-version
+     m_request.version = match.captured(3);
+diff --git a/src/base/http/types.h b/src/base/http/types.h
+index a38e3d3283..6bb443d6a5 100644
+--- a/src/base/http/types.h
++++ b/src/base/http/types.h
+@@ -97,8 +97,8 @@ namespace Http
+         QString version;
+         QString method;
+         QString path;
+-        QByteArray query;
+         QStringMap headers;
++        QMap<QString, QByteArray> query;
+         QStringMap posts;
+         QVector<UploadedFile> files;
+     };
+diff --git a/src/base/rss/private/rss_parser.cpp b/src/base/rss/private/rss_parser.cpp
+index 1d445f1c71..e9d6c0efaf 100644
+--- a/src/base/rss/private/rss_parser.cpp
++++ b/src/base/rss/private/rss_parser.cpp
+@@ -590,6 +590,7 @@ void Parser::parse_impl(const QByteArray &feedData)
+ void Parser::parseRssArticle(QXmlStreamReader &xml)
+ {
+     QVariantHash article;
++    QString altTorrentUrl;
+ 
+     while (!xml.atEnd()) {
+         xml.readNext();
+@@ -605,6 +606,8 @@ void Parser::parseRssArticle(QXmlStreamReader &xml)
+             else if (name == QLatin1String("enclosure")) {
+                 if (xml.attributes().value("type") == QLatin1String("application/x-bittorrent"))
+                     article[Article::KeyTorrentURL] = xml.attributes().value(QLatin1String("url")).toString();
++                else if (xml.attributes().value("type").isEmpty())
++                    altTorrentUrl = xml.attributes().value(QLatin1String("url")).toString();
+             }
+             else if (name == QLatin1String("link")) {
+                 const QString text {xml.readElementText().trimmed()};
+@@ -631,6 +634,9 @@ void Parser::parseRssArticle(QXmlStreamReader &xml)
+         }
+     }
+ 
++    if (article[Article::KeyTorrentURL].toString().isEmpty())
++        article[Article::KeyTorrentURL] = altTorrentUrl;
++
+     m_result.articles.prepend(article);
+ }
+ 
+diff --git a/src/base/unicodestrings.h b/src/base/unicodestrings.h
+index 9f44b1192a..b49fdcc95a 100644
+--- a/src/base/unicodestrings.h
++++ b/src/base/unicodestrings.h
+@@ -38,8 +38,6 @@
+ // See issue #3059 for more details (https://github.com/qbittorrent/qBittorrent/issues/3059).
+ const char C_INFINITY[] = "∞";
+ const char C_NON_BREAKING_SPACE[] = " ";
+-const char C_UP[] = "▲";
+-const char C_DOWN[] = "▼";
+ const char C_COPYRIGHT[] = "©";
+ const char C_THIN_SPACE[] = " ";
+ const char C_UTP[] = "μTP";
+diff --git a/src/gui/addnewtorrentdialog.cpp b/src/gui/addnewtorrentdialog.cpp
+index 7283c5a4c7..759a17d1a8 100644
+--- a/src/gui/addnewtorrentdialog.cpp
++++ b/src/gui/addnewtorrentdialog.cpp
+@@ -30,8 +30,10 @@
+ 
+ #include <QDebug>
+ #include <QFile>
++#include <QDir>
+ #include <QMenu>
+ #include <QPushButton>
++#include <QShortcut>
+ #include <QString>
+ #include <QUrl>
+ #include <QVector>
+@@ -40,14 +42,12 @@
+ #include "base/bittorrent/magneturi.h"
+ #include "base/bittorrent/session.h"
+ #include "base/bittorrent/torrenthandle.h"
+-#include "base/bittorrent/torrentinfo.h"
+ #include "base/global.h"
+ #include "base/net/downloadhandler.h"
+ #include "base/net/downloadmanager.h"
+ #include "base/preferences.h"
+ #include "base/settingsstorage.h"
+ #include "base/torrentfileguard.h"
+-#include "base/unicodestrings.h"
+ #include "base/utils/fs.h"
+ #include "base/utils/misc.h"
+ #include "base/utils/string.h"
+@@ -62,16 +62,14 @@
+ 
+ namespace
+ {
+-#define SETTINGS_KEY(name) QStringLiteral("AddNewTorrentDialog/" name)
+-    const QString KEY_ENABLED = SETTINGS_KEY("Enabled");
+-    const QString KEY_DEFAULTCATEGORY = SETTINGS_KEY("DefaultCategory");
+-    const QString KEY_TREEHEADERSTATE = SETTINGS_KEY("TreeHeaderState");
+-    const QString KEY_WIDTH = SETTINGS_KEY("Width");
+-    const QString KEY_EXPANDED = SETTINGS_KEY("Expanded");
+-    const QString KEY_TOPLEVEL = SETTINGS_KEY("TopLevel");
+-    const QString KEY_SAVEPATHHISTORY = SETTINGS_KEY("SavePathHistory");
+-    const QString KEY_SAVEPATHHISTORYLENGTH = SETTINGS_KEY("SavePathHistoryLength");
+-    const QString KEY_REMEMBERLASTSAVEPATH = SETTINGS_KEY("RememberLastSavePath");
++#define SETTINGS_KEY(name) "AddNewTorrentDialog/" name
++    const QString KEY_ENABLED = QStringLiteral(SETTINGS_KEY("Enabled"));
++    const QString KEY_DEFAULTCATEGORY = QStringLiteral(SETTINGS_KEY("DefaultCategory"));
++    const QString KEY_TREEHEADERSTATE = QStringLiteral(SETTINGS_KEY("TreeHeaderState"));
++    const QString KEY_TOPLEVEL = QStringLiteral(SETTINGS_KEY("TopLevel"));
++    const QString KEY_SAVEPATHHISTORY = QStringLiteral(SETTINGS_KEY("SavePathHistory"));
++    const QString KEY_SAVEPATHHISTORYLENGTH = QStringLiteral(SETTINGS_KEY("SavePathHistoryLength"));
++    const QString KEY_REMEMBERLASTSAVEPATH = QStringLiteral(SETTINGS_KEY("RememberLastSavePath"));
+ 
+     // just a shortcut
+     inline SettingsStorage *settings()
+@@ -91,6 +89,8 @@ AddNewTorrentDialog::AddNewTorrentDialog(const BitTorrent::AddTorrentParams &inP
+     , m_hasMetadata(false)
+     , m_oldIndex(0)
+     , m_torrentParams(inParams)
++    , m_storeDialogSize(SETTINGS_KEY("DialogSize"))
++    , m_storeSplitterState(SETTINGS_KEY("SplitterState"))
+ {
+     // TODO: set dialog file properties using m_torrentParams.filePriorities
+     m_ui->setupUi(this);
+@@ -151,7 +151,6 @@ AddNewTorrentDialog::AddNewTorrentDialog(const BitTorrent::AddTorrentParams &inP
+     m_ui->contentTreeView->header()->setSortIndicator(0, Qt::AscendingOrder);
+     loadState();
+     // Signal / slots
+-    connect(m_ui->toolButtonAdvanced, &QToolButton::clicked, this, &AddNewTorrentDialog::showAdvancedSettings);
+     connect(m_ui->doNotDeleteTorrentCheckBox, &QCheckBox::clicked, this, &AddNewTorrentDialog::doNotDeleteTorrentClicked);
+     QShortcut *editHotkey = new QShortcut(Qt::Key_F2, m_ui->contentTreeView, nullptr, nullptr, Qt::WidgetShortcut);
+     connect(editHotkey, &QShortcut::activated, this, &AddNewTorrentDialog::renameSelectedFile);
+@@ -209,22 +208,17 @@ void AddNewTorrentDialog::setSavePathHistoryLength(int value)
+ 
+ void AddNewTorrentDialog::loadState()
+ {
++    Utils::Gui::resize(this, m_storeDialogSize);
++    m_ui->splitter->restoreState(m_storeSplitterState);
+     m_headerState = settings()->loadValue(KEY_TREEHEADERSTATE).toByteArray();
+-
+-    const QSize newSize = Utils::Gui::scaledSize(this, size());
+-    const int width = settings()->loadValue(KEY_WIDTH, newSize.width()).toInt();
+-    const int height = newSize.height();
+-    resize(width, height);
+-
+-    m_ui->toolButtonAdvanced->setChecked(settings()->loadValue(KEY_EXPANDED).toBool());
+ }
+ 
+ void AddNewTorrentDialog::saveState()
+ {
++    m_storeDialogSize = size();
++    m_storeSplitterState = m_ui->splitter->saveState();
+     if (m_contentModel)
+         settings()->storeValue(KEY_TREEHEADERSTATE, m_ui->contentTreeView->header()->saveState());
+-    settings()->storeValue(KEY_WIDTH, width());
+-    settings()->storeValue(KEY_EXPANDED, m_ui->toolButtonAdvanced->isChecked());
+ }
+ 
+ void AddNewTorrentDialog::show(QString source, const BitTorrent::AddTorrentParams &inParams, QWidget *parent)
+@@ -314,7 +308,7 @@ bool AddNewTorrentDialog::loadTorrent(const QString &torrentPath)
+         return false;
+     }
+ 
+-    m_ui->lblhash->setText(m_hash);
++    m_ui->labelHashData->setText(m_hash);
+     setupTreeview();
+     TMMChanged(m_ui->comboTTM->currentIndex());
+     return true;
+@@ -359,7 +353,7 @@ bool AddNewTorrentDialog::loadMagnet(const BitTorrent::MagnetUri &magnetUri)
+ 
+     BitTorrent::Session::instance()->loadMetadata(magnetUri);
+     setMetadataProgressIndicator(true, tr("Retrieving metadata..."));
+-    m_ui->lblhash->setText(m_hash);
++    m_ui->labelHashData->setText(m_hash);
+ 
+     return true;
+ }
+@@ -373,27 +367,6 @@ void AddNewTorrentDialog::showEvent(QShowEvent *event)
+     raise();
+ }
+ 
+-void AddNewTorrentDialog::showAdvancedSettings(bool show)
+-{
+-    const int minimumW = minimumWidth();
+-    setMinimumWidth(width()); // to remain the same width
+-    if (show) {
+-        m_ui->toolButtonAdvanced->setText(QString::fromUtf8(C_UP));
+-        m_ui->groupBoxSettings->setVisible(true);
+-        m_ui->infoGroup->setVisible(true);
+-        m_ui->contentTreeView->setVisible(m_hasMetadata);
+-        static_cast<QVBoxLayout *>(layout())->insertWidget(layout()->indexOf(m_ui->checkBoxNeverShow) + 1, m_ui->toolButtonAdvanced);
+-    }
+-    else {
+-        m_ui->toolButtonAdvanced->setText(QString::fromUtf8(C_DOWN));
+-        m_ui->groupBoxSettings->setVisible(false);
+-        m_ui->infoGroup->setVisible(false);
+-        m_ui->buttonsHLayout->insertWidget(0, layout()->takeAt(layout()->indexOf(m_ui->checkBoxNeverShow) + 1)->widget());
+-    }
+-    adjustSize();
+-    setMinimumWidth(minimumW);
+-}
+-
+ void AddNewTorrentDialog::saveSavePathHistory() const
+ {
+     // Get current history
+@@ -447,7 +420,7 @@ void AddNewTorrentDialog::updateDiskSpaceLabel()
+     sizeString += tr("Free space on disk: %1").arg(Utils::Misc::friendlyUnit(Utils::Fs::freeDiskSpaceOnPath(
+                                                                    m_ui->savePath->selectedPath())));
+     sizeString += ')';
+-    m_ui->labelSize->setText(sizeString);
++    m_ui->labelSizeData->setText(sizeString);
+ }
+ 
+ void AddNewTorrentDialog::onSavePathChanged(const QString &newPath)
+@@ -730,16 +703,16 @@ void AddNewTorrentDialog::setMetadataProgressIndicator(bool visibleIndicator, co
+ void AddNewTorrentDialog::setupTreeview()
+ {
+     if (!m_hasMetadata) {
+-        setCommentText(tr("Not Available", "This comment is unavailable"));
+-        m_ui->labelDate->setText(tr("Not Available", "This date is unavailable"));
++        m_ui->labelCommentData->setText(tr("Not Available", "This comment is unavailable"));
++        m_ui->labelDateData->setText(tr("Not Available", "This date is unavailable"));
+     }
+     else {
+         // Set dialog title
+         setWindowTitle(m_torrentInfo.name());
+ 
+         // Set torrent information
+-        setCommentText(Utils::Misc::parseHtmlLinks(m_torrentInfo.comment()));
+-        m_ui->labelDate->setText(!m_torrentInfo.creationDate().isNull() ? m_torrentInfo.creationDate().toString(Qt::DefaultLocaleShortDate) : tr("Not available"));
++        m_ui->labelCommentData->setText(Utils::Misc::parseHtmlLinks(m_torrentInfo.comment()));
++        m_ui->labelDateData->setText(!m_torrentInfo.creationDate().isNull() ? m_torrentInfo.creationDate().toString(Qt::DefaultLocaleShortDate) : tr("Not available"));
+ 
+         // Prepare content tree
+         m_contentModel = new TorrentContentFilterModel(this);
+@@ -766,7 +739,6 @@ void AddNewTorrentDialog::setupTreeview()
+     }
+ 
+     updateDiskSpaceLabel();
+-    showAdvancedSettings(settings()->loadValue(KEY_EXPANDED, false).toBool());
+ }
+ 
+ void AddNewTorrentDialog::handleDownloadFailed(const QString &url, const QString &reason)
+@@ -801,7 +773,6 @@ void AddNewTorrentDialog::TMMChanged(int index)
+         m_ui->groupBoxSavePath->setEnabled(true);
+         m_ui->savePath->blockSignals(false);
+         m_ui->savePath->setCurrentIndex(m_oldIndex < m_ui->savePath->count() ? m_oldIndex : m_ui->savePath->count() - 1);
+-        m_ui->toolButtonAdvanced->setEnabled(true);
+     }
+     else {
+         m_ui->groupBoxSavePath->setEnabled(false);
+@@ -809,23 +780,9 @@ void AddNewTorrentDialog::TMMChanged(int index)
+         m_ui->savePath->clear();
+         QString savePath = BitTorrent::Session::instance()->categorySavePath(m_ui->categoryComboBox->currentText());
+         m_ui->savePath->addItem(savePath);
+-        m_ui->toolButtonAdvanced->setChecked(true);
+-        m_ui->toolButtonAdvanced->setEnabled(false);
+-        showAdvancedSettings(true);
+     }
+ }
+ 
+-void AddNewTorrentDialog::setCommentText(const QString &str) const
+-{
+-    m_ui->commentLabel->setText(str);
+-
+-    // workaround for the additional space introduced by QScrollArea
+-    int lineHeight = m_ui->commentLabel->fontMetrics().lineSpacing();
+-    int lines = 1 + str.count('\n');
+-    int height = lineHeight * lines;
+-    m_ui->scrollArea->setMaximumHeight(height);
+-}
+-
+ void AddNewTorrentDialog::doNotDeleteTorrentClicked(bool checked)
+ {
+     m_torrentGuard->setAutoRemove(!checked);
+diff --git a/src/gui/addnewtorrentdialog.h b/src/gui/addnewtorrentdialog.h
+index e2636dfe12..38fc894a67 100644
+--- a/src/gui/addnewtorrentdialog.h
++++ b/src/gui/addnewtorrentdialog.h
+@@ -31,11 +31,11 @@
+ 
+ #include <QDialog>
+ #include <QScopedPointer>
+-#include <QShortcut>
+ 
+ #include "base/bittorrent/addtorrentparams.h"
+ #include "base/bittorrent/infohash.h"
+ #include "base/bittorrent/torrentinfo.h"
++#include "base/settingvalue.h"
+ 
+ namespace BitTorrent
+ {
+@@ -72,7 +72,6 @@ class AddNewTorrentDialog : public QDialog
+     static void show(QString source, QWidget *parent);
+ 
+ private slots:
+-    void showAdvancedSettings(bool show);
+     void displayContentTreeMenu(const QPoint &);
+     void updateDiskSpaceLabel();
+     void onSavePathChanged(const QString &newPath);
+@@ -99,7 +98,6 @@ private slots:
+     void saveState();
+     void setMetadataProgressIndicator(bool visibleIndicator, const QString &labelText = QString());
+     void setupTreeview();
+-    void setCommentText(const QString &str) const;
+     void setSavePath(const QString &newPath);
+ 
+     void showEvent(QShowEvent *event) override;
+@@ -115,6 +113,9 @@ private slots:
+     int m_oldIndex;
+     QScopedPointer<TorrentFileGuard> m_torrentGuard;
+     BitTorrent::AddTorrentParams m_torrentParams;
++
++    CachedSettingValue<QSize> m_storeDialogSize;
++    CachedSettingValue<QByteArray> m_storeSplitterState;
+ };
+ 
+ #endif // ADDNEWTORRENTDIALOG_H
+diff --git a/src/gui/addnewtorrentdialog.ui b/src/gui/addnewtorrentdialog.ui
+index 629f33909e..23140e37d2 100644
+--- a/src/gui/addnewtorrentdialog.ui
++++ b/src/gui/addnewtorrentdialog.ui
+@@ -6,336 +6,363 @@
+    <rect>
+     <x>0</x>
+     <y>0</y>
+-    <width>414</width>
+-    <height>630</height>
++    <width>900</width>
++    <height>620</height>
+    </rect>
+   </property>
+   <layout class="QVBoxLayout" name="AddNewTorrentDialogLayout">
+    <item>
+-    <layout class="QHBoxLayout" name="horizontalLayout">
+-     <item>
+-      <widget class="QLabel" name="labelTorrentManagementMode">
+-       <property name="text">
+-        <string>Torrent Management Mode:</string>
++    <widget class="QSplitter" name="splitter">
++     <property name="orientation">
++      <enum>Qt::Horizontal</enum>
++     </property>
++     <property name="childrenCollapsible">
++      <bool>false</bool>
++     </property>
++     <widget class="QFrame" name="torrentoptionsFrame">
++      <layout class="QVBoxLayout" name="mainlayout_addui">
++       <property name="leftMargin">
++        <number>0</number>
+        </property>
+-      </widget>
+-     </item>
+-     <item>
+-      <widget class="QComboBox" name="comboTTM">
+-       <property name="toolTip">
+-        <string>Automatic mode means that various torrent properties(eg save path) will be decided by the associated category</string>
++       <property name="topMargin">
++        <number>0</number>
++       </property>
++       <property name="rightMargin">
++        <number>0</number>
++       </property>
++       <property name="bottomMargin">
++        <number>0</number>
+        </property>
+        <item>
+-        <property name="text">
+-         <string>Manual</string>
+-        </property>
++        <layout class="QHBoxLayout" name="managementLayout">
++         <item>
++          <widget class="QLabel" name="labelTorrentManagementMode">
++           <property name="text">
++            <string>Torrent Management Mode:</string>
++           </property>
++          </widget>
++         </item>
++         <item>
++          <widget class="QComboBox" name="comboTTM">
++           <property name="toolTip">
++            <string>Automatic mode means that various torrent properties(eg save path) will be decided by the associated category</string>
++           </property>
++           <item>
++            <property name="text">
++             <string>Manual</string>
++            </property>
++           </item>
++           <item>
++            <property name="text">
++             <string>Automatic</string>
++            </property>
++           </item>
++          </widget>
++         </item>
++         <item>
++          <spacer name="horizontalSpacer">
++           <property name="orientation">
++            <enum>Qt::Horizontal</enum>
++           </property>
++           <property name="sizeHint" stdset="0">
++            <size>
++             <width>20</width>
++             <height>20</height>
++            </size>
++           </property>
++          </spacer>
++         </item>
++        </layout>
+        </item>
+        <item>
+-        <property name="text">
+-         <string>Automatic</string>
+-        </property>
+-       </item>
+-      </widget>
+-     </item>
+-     <item>
+-      <spacer name="horizontalSpacer_2">
+-       <property name="orientation">
+-        <enum>Qt::Horizontal</enum>
+-       </property>
+-       <property name="sizeHint" stdset="0">
+-        <size>
+-         <width>40</width>
+-         <height>20</height>
+-        </size>
+-       </property>
+-      </spacer>
+-     </item>
+-    </layout>
+-   </item>
+-   <item>
+-    <widget class="QGroupBox" name="groupBoxSavePath">
+-     <property name="title">
+-      <string>Save at</string>
+-     </property>
+-     <layout class="QVBoxLayout" name="verticalLayout_2">
+-      <item>
+-       <widget class="FileSystemPathComboEdit" name="savePath" native="true"/>
+-      </item>
+-      <item>
+-       <widget class="QCheckBox" name="checkBoxRememberLastSavePath">
+-        <property name="text">
+-         <string>Remember last used save path</string>
+-        </property>
+-       </widget>
+-      </item>
+-     </layout>
+-    </widget>
+-   </item>
+-   <item>
+-    <widget class="QCheckBox" name="doNotDeleteTorrentCheckBox">
+-     <property name="toolTip">
+-      <string>When checked, the .torrent file will not be deleted despite the settings at the &quot;Download&quot; page of the options dialog</string>
+-     </property>
+-     <property name="text">
+-      <string>Do not delete .torrent file</string>
+-     </property>
+-    </widget>
+-   </item>
+-   <item>
+-    <widget class="QCheckBox" name="checkBoxNeverShow">
+-     <property name="text">
+-      <string>Never show again</string>
+-     </property>
+-    </widget>
+-   </item>
+-   <item>
+-    <widget class="QToolButton" name="toolButtonAdvanced">
+-     <property name="text">
+-      <string notr="true">▼</string>
+-     </property>
+-     <property name="checkable">
+-      <bool>true</bool>
+-     </property>
+-    </widget>
+-   </item>
+-   <item>
+-    <widget class="QGroupBox" name="groupBoxSettings">
+-     <property name="title">
+-      <string>Torrent settings</string>
+-     </property>
+-     <layout class="QGridLayout" name="gridLayout_3">
+-      <item row="1" column="2">
+-       <widget class="QCheckBox" name="defaultCategoryCheckbox">
+-        <property name="text">
+-         <string>Set as default category</string>
+-        </property>
+-       </widget>
+-      </item>
+-      <item row="0" column="2">
+-       <layout class="QHBoxLayout" name="horizontalLayout_1">
+-        <item>
+-         <widget class="QLabel" name="label_5">
+-          <property name="text">
+-           <string>Category:</string>
+-          </property>
+-         </widget>
+-        </item>
+-        <item>
+-         <widget class="QComboBox" name="categoryComboBox">
+-          <property name="sizePolicy">
+-           <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+-            <horstretch>0</horstretch>
+-            <verstretch>0</verstretch>
+-           </sizepolicy>
+-          </property>
+-          <property name="editable">
+-           <bool>true</bool>
+-          </property>
+-          <property name="insertPolicy">
+-           <enum>QComboBox::InsertAtTop</enum>
+-          </property>
+-         </widget>
+-        </item>
+-       </layout>
+-      </item>
+-      <item row="0" column="0">
+-       <widget class="QCheckBox" name="startTorrentCheckBox">
+-        <property name="text">
+-         <string>Start torrent</string>
+-        </property>
+-        <property name="checked">
+-         <bool>true</bool>
+-        </property>
+-       </widget>
+-      </item>
+-      <item row="1" column="0">
+-       <widget class="QCheckBox" name="skipCheckingCheckBox">
+-        <property name="text">
+-         <string>Skip hash check</string>
+-        </property>
+-       </widget>
+-      </item>
+-      <item row="0" column="1">
+-       <spacer name="horizontalSpacer2">
+-        <property name="orientation">
+-         <enum>Qt::Horizontal</enum>
+-        </property>
+-        <property name="sizeType">
+-         <enum>QSizePolicy::Fixed</enum>
+-        </property>
+-        <property name="sizeHint" stdset="0">
+-         <size>
+-          <width>35</width>
+-          <height>0</height>
+-         </size>
+-        </property>
+-       </spacer>
+-      </item>
+-      <item row="2" column="0">
+-       <widget class="QCheckBox" name="createSubfolderCheckBox">
+-        <property name="text">
+-         <string>Create subfolder</string>
+-        </property>
+-        <property name="checked">
+-         <bool>true</bool>
+-        </property>
+-       </widget>
+-      </item>
+-      <item row="3" column="0">
+-       <widget class="QCheckBox" name="sequentialCheckBox">
+-        <property name="text">
+-         <string>Download in sequential order</string>
+-        </property>
+-       </widget>
+-      </item>
+-      <item row="4" column="0">
+-       <widget class="QCheckBox" name="firstLastCheckBox">
+-        <property name="text">
+-         <string>Download first and last pieces first</string>
+-        </property>
+-       </widget>
+-      </item>
+-     </layout>
+-    </widget>
+-   </item>
+-   <item>
+-    <widget class="QGroupBox" name="infoGroup">
+-     <property name="title">
+-      <string>Torrent information</string>
+-     </property>
+-     <layout class="QGridLayout" name="gridLayout_2">
+-      <item row="2" column="1">
+-       <widget class="QLabel" name="lblhash">
+-        <property name="text">
+-         <string/>
+-        </property>
+-        <property name="textFormat">
+-         <enum>Qt::PlainText</enum>
+-        </property>
+-        <property name="textInteractionFlags">
+-         <set>Qt::TextSelectableByMouse</set>
+-        </property>
+-       </widget>
+-      </item>
+-      <item row="2" column="0">
+-       <widget class="QLabel" name="label_4">
+-        <property name="text">
+-         <string>Hash:</string>
+-        </property>
+-       </widget>
+-      </item>
+-      <item row="4" column="0" colspan="2">
+-       <widget class="TorrentContentTreeView" name="contentTreeView">
+-        <property name="contextMenuPolicy">
+-         <enum>Qt::CustomContextMenu</enum>
+-        </property>
+-        <property name="selectionMode">
+-         <enum>QAbstractItemView::ExtendedSelection</enum>
+-        </property>
+-        <property name="sortingEnabled">
+-         <bool>true</bool>
+-        </property>
+-       </widget>
+-      </item>
+-      <item row="1" column="1">
+-       <widget class="QLabel" name="labelDate">
+-        <property name="text">
+-         <string/>
+-        </property>
+-       </widget>
+-      </item>
+-      <item row="1" column="0">
+-       <widget class="QLabel" name="label_3">
+-        <property name="text">
+-         <string>Date:</string>
+-        </property>
+-       </widget>
+-      </item>
+-      <item row="0" column="0">
+-       <widget class="QLabel" name="label">
+-        <property name="text">
+-         <string>Size:</string>
+-        </property>
+-       </widget>
+-      </item>
+-      <item row="0" column="1">
+-       <widget class="QLabel" name="labelSize">
+-        <property name="text">
+-         <string/>
+-        </property>
+-       </widget>
+-      </item>
+-      <item row="3" column="0">
+-       <widget class="QLabel" name="label_2">
+-        <property name="text">
+-         <string>Comment:</string>
+-        </property>
+-        <property name="alignment">
+-         <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
+-        </property>
+-       </widget>
+-      </item>
+-      <item row="3" column="1">
+-       <widget class="QScrollArea" name="scrollArea">
+-        <property name="frameShape">
+-         <enum>QFrame::NoFrame</enum>
+-        </property>
+-        <property name="widgetResizable">
+-         <bool>true</bool>
+-        </property>
+-        <widget class="QWidget" name="scrollAreaWidgetContents_2">
+-         <property name="geometry">
+-          <rect>
+-           <x>0</x>
+-           <y>0</y>
+-           <width>321</width>
+-           <height>69</height>
+-          </rect>
++        <widget class="QGroupBox" name="groupBoxSavePath">
++         <property name="title">
++          <string>Save at</string>
+          </property>
+          <layout class="QVBoxLayout" name="verticalLayout">
+-          <property name="leftMargin">
+-           <number>0</number>
+-          </property>
+-          <property name="topMargin">
+-           <number>0</number>
+-          </property>
+-          <property name="rightMargin">
+-           <number>0</number>
+-          </property>
+-          <property name="bottomMargin">
+-           <number>0</number>
+-          </property>
+           <item>
+-           <widget class="QLabel" name="commentLabel">
++           <widget class="FileSystemPathComboEdit" name="savePath" native="true"/>
++          </item>
++          <item alignment="Qt::AlignRight">
++           <widget class="QCheckBox" name="checkBoxRememberLastSavePath">
++            <property name="text">
++             <string>Remember last used save path</string>
++            </property>
++           </widget>
++          </item>
++         </layout>
++        </widget>
++       </item>
++       <item>
++        <widget class="QGroupBox" name="groupBoxSettings">
++         <property name="title">
++          <string>Torrent settings</string>
++         </property>
++         <layout class="QVBoxLayout" name="verticalLayout_3">
++          <item>
++           <layout class="QHBoxLayout" name="categoryLayout">
++            <item>
++             <widget class="QLabel" name="labelCategory">
++              <property name="text">
++               <string>Category:</string>
++              </property>
++             </widget>
++            </item>
++            <item>
++             <widget class="QComboBox" name="categoryComboBox">
++              <property name="sizePolicy">
++               <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
++                <horstretch>0</horstretch>
++                <verstretch>0</verstretch>
++               </sizepolicy>
++              </property>
++              <property name="editable">
++               <bool>true</bool>
++              </property>
++              <property name="insertPolicy">
++               <enum>QComboBox::InsertAtTop</enum>
++              </property>
++             </widget>
++            </item>
++           </layout>
++          </item>
++          <item alignment="Qt::AlignRight">
++           <widget class="QCheckBox" name="defaultCategoryCheckbox">
++            <property name="text">
++             <string>Set as default category</string>
++            </property>
++           </widget>
++          </item>
++          <item>
++           <layout class="QGridLayout" name="gridLayout">
++            <item row="3" column="0">
++             <widget class="QCheckBox" name="doNotDeleteTorrentCheckBox">
++              <property name="toolTip">
++               <string>When checked, the .torrent file will not be deleted despite the settings at the &quot;Download&quot; page of the options dialog</string>
++              </property>
++              <property name="text">
++               <string>Do not delete .torrent file</string>
++              </property>
++             </widget>
++            </item>
++            <item row="1" column="1">
++             <widget class="QCheckBox" name="firstLastCheckBox">
++              <property name="text">
++               <string>Download first and last pieces first</string>
++              </property>
++             </widget>
++            </item>
++            <item row="2" column="0">
++             <widget class="QCheckBox" name="skipCheckingCheckBox">
++              <property name="text">
++               <string>Skip hash check</string>
++              </property>
++             </widget>
++            </item>
++            <item row="0" column="1">
++             <widget class="QCheckBox" name="sequentialCheckBox">
++              <property name="text">
++               <string>Download in sequential order</string>
++              </property>
++             </widget>
++            </item>
++            <item row="1" column="0">
++             <widget class="QCheckBox" name="createSubfolderCheckBox">
++              <property name="text">
++               <string>Create subfolder</string>
++              </property>
++             </widget>
++            </item>
++            <item row="0" column="0">
++             <widget class="QCheckBox" name="startTorrentCheckBox">
++              <property name="text">
++               <string>Start torrent</string>
++              </property>
++             </widget>
++            </item>
++            <item row="0" column="2">
++             <spacer name="horizontalSpacer_3">
++              <property name="orientation">
++               <enum>Qt::Horizontal</enum>
++              </property>
++              <property name="sizeHint" stdset="0">
++               <size>
++                <width>40</width>
++                <height>20</height>
++               </size>
++              </property>
++             </spacer>
++            </item>
++           </layout>
++          </item>
++         </layout>
++        </widget>
++       </item>
++       <item>
++        <widget class="QGroupBox" name="infoGroup">
++         <property name="sizePolicy">
++          <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
++           <horstretch>0</horstretch>
++           <verstretch>0</verstretch>
++          </sizepolicy>
++         </property>
++         <property name="title">
++          <string>Torrent information</string>
++         </property>
++         <layout class="QGridLayout" name="gridLayout_2">
++          <item row="1" column="0">
++           <widget class="QLabel" name="labelDate">
+             <property name="text">
+-             <string/>
++             <string>Date:</string>
+             </property>
++           </widget>
++          </item>
++          <item row="0" column="1">
++           <widget class="QLabel" name="labelSizeData"/>
++          </item>
++          <item row="1" column="1">
++           <widget class="QLabel" name="labelDateData"/>
++          </item>
++          <item row="0" column="0">
++           <widget class="QLabel" name="labelSize">
++            <property name="text">
++             <string>Size:</string>
++            </property>
++           </widget>
++          </item>
++          <item row="2" column="1">
++           <widget class="QLabel" name="labelHashData">
+             <property name="textFormat">
+-             <enum>Qt::RichText</enum>
++             <enum>Qt::PlainText</enum>
+             </property>
+-            <property name="alignment">
+-             <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
++            <property name="textInteractionFlags">
++             <set>Qt::TextSelectableByMouse</set>
+             </property>
+-            <property name="wordWrap">
+-             <bool>true</bool>
++           </widget>
++          </item>
++          <item row="3" column="1">
++           <widget class="QScrollArea" name="scrollArea">
++            <property name="styleSheet">
++             <string notr="true">background-color: rgba(0, 0, 0, 0);</string>
+             </property>
+-            <property name="openExternalLinks">
++            <property name="frameShape">
++             <enum>QFrame::NoFrame</enum>
++            </property>
++            <property name="widgetResizable">
+              <bool>true</bool>
+             </property>
+-            <property name="textInteractionFlags">
+-             <set>Qt::TextBrowserInteraction</set>
++            <widget class="QWidget" name="scrollAreaWidgetContents">
++             <property name="geometry">
++              <rect>
++               <x>0</x>
++               <y>0</y>
++               <width>421</width>
++               <height>68</height>
++              </rect>
++             </property>
++             <layout class="QVBoxLayout" name="verticalLayout_2">
++              <property name="leftMargin">
++               <number>0</number>
++              </property>
++              <property name="topMargin">
++               <number>0</number>
++              </property>
++              <property name="rightMargin">
++               <number>0</number>
++              </property>
++              <property name="bottomMargin">
++               <number>0</number>
++              </property>
++              <item>
++               <widget class="QLabel" name="labelCommentData">
++                <property name="textFormat">
++                 <enum>Qt::RichText</enum>
++                </property>
++                <property name="alignment">
++                 <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
++                </property>
++                <property name="wordWrap">
++                 <bool>true</bool>
++                </property>
++                <property name="openExternalLinks">
++                 <bool>true</bool>
++                </property>
++                <property name="textInteractionFlags">
++                 <set>Qt::TextBrowserInteraction</set>
++                </property>
++               </widget>
++              </item>
++             </layout>
++            </widget>
++           </widget>
++          </item>
++          <item row="2" column="0">
++           <widget class="QLabel" name="labelHash">
++            <property name="text">
++             <string>Hash:</string>
++            </property>
++           </widget>
++          </item>
++          <item row="3" column="0">
++           <widget class="QLabel" name="labelComment">
++            <property name="text">
++             <string>Comment:</string>
++            </property>
++            <property name="alignment">
++             <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+-       </widget>
+-      </item>
+-     </layout>
++       </item>
++      </layout>
++     </widget>
++     <widget class="TorrentContentTreeView" name="contentTreeView">
++      <property name="sizePolicy">
++       <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
++        <horstretch>1</horstretch>
++        <verstretch>0</verstretch>
++       </sizepolicy>
++      </property>
++      <property name="contextMenuPolicy">
++       <enum>Qt::CustomContextMenu</enum>
++      </property>
++      <property name="selectionMode">
++       <enum>QAbstractItemView::ExtendedSelection</enum>
++      </property>
++      <property name="sortingEnabled">
++       <bool>true</bool>
++      </property>
++     </widget>
+     </widget>
+    </item>
+    <item>
+     <layout class="QHBoxLayout" name="buttonsHLayout">
++     <item>
++      <widget class="QCheckBox" name="checkBoxNeverShow">
++       <property name="text">
++        <string>Never show again</string>
++       </property>
++      </widget>
++     </item>
++     <item>
++      <spacer name="horizontalSpacer_2">
++       <property name="orientation">
++        <enum>Qt::Horizontal</enum>
++       </property>
++       <property name="sizeHint" stdset="0">
++        <size>
++         <width>40</width>
++         <height>20</height>
++        </size>
++       </property>
++      </spacer>
++     </item>
++    </layout>
++   </item>
++   <item>
++    <layout class="QHBoxLayout" name="horizontalLayout">
+      <item>
+       <widget class="QProgressBar" name="progMetaLoading">
+        <property name="sizePolicy">
+@@ -353,13 +380,17 @@
+        <property name="textVisible">
+         <bool>false</bool>
+        </property>
+-       <property name="format">
+-        <string notr="true">%p%</string>
+-       </property>
+       </widget>
+      </item>
+      <item>
+-      <widget class="QLabel" name="lblMetaLoading"/>
++      <widget class="QLabel" name="lblMetaLoading">
++       <property name="sizePolicy">
++        <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
++         <horstretch>0</horstretch>
++         <verstretch>0</verstretch>
++        </sizepolicy>
++       </property>
++      </widget>
+      </item>
+      <item>
+       <widget class="QDialogButtonBox" name="buttonBox">
+@@ -405,18 +436,6 @@
+    <container>1</container>
+   </customwidget>
+  </customwidgets>
+- <tabstops>
+-  <tabstop>savePath</tabstop>
+-  <tabstop>checkBoxRememberLastSavePath</tabstop>
+-  <tabstop>checkBoxNeverShow</tabstop>
+-  <tabstop>toolButtonAdvanced</tabstop>
+-  <tabstop>startTorrentCheckBox</tabstop>
+-  <tabstop>skipCheckingCheckBox</tabstop>
+-  <tabstop>categoryComboBox</tabstop>
+-  <tabstop>defaultCategoryCheckbox</tabstop>
+-  <tabstop>scrollArea</tabstop>
+-  <tabstop>contentTreeView</tabstop>
+- </tabstops>
+  <resources/>
+  <connections>
+   <connection>
+@@ -426,8 +445,8 @@
+    <slot>accept()</slot>
+    <hints>
+     <hint type="sourcelabel">
+-     <x>403</x>
+-     <y>579</y>
++     <x>928</x>
++     <y>855</y>
+     </hint>
+     <hint type="destinationlabel">
+      <x>157</x>
+@@ -442,8 +461,8 @@
+    <slot>reject()</slot>
+    <hints>
+     <hint type="sourcelabel">
+-     <x>403</x>
+-     <y>579</y>
++     <x>928</x>
++     <y>855</y>
+     </hint>
+     <hint type="destinationlabel">
+      <x>286</x>
+@@ -452,34 +471,34 @@
+    </hints>
+   </connection>
+   <connection>
+-   <sender>categoryComboBox</sender>
++   <sender>comboTTM</sender>
+    <signal>currentIndexChanged(int)</signal>
+    <receiver>AddNewTorrentDialog</receiver>
+-   <slot>categoryChanged(int)</slot>
++   <slot>TMMChanged(int)</slot>
+    <hints>
+     <hint type="sourcelabel">
+-     <x>337</x>
+-     <y>205</y>
++     <x>250</x>
++     <y>53</y>
+     </hint>
+     <hint type="destinationlabel">
+-     <x>403</x>
+-     <y>160</y>
++     <x>467</x>
++     <y>249</y>
+     </hint>
+    </hints>
+   </connection>
+   <connection>
+-   <sender>comboTTM</sender>
++   <sender>categoryComboBox</sender>
+    <signal>currentIndexChanged(int)</signal>
+    <receiver>AddNewTorrentDialog</receiver>
+-   <slot>TMMChanged(int)</slot>
++   <slot>categoryChanged(int)</slot>
+    <hints>
+     <hint type="sourcelabel">
+-     <x>200</x>
+-     <y>19</y>
++     <x>266</x>
++     <y>231</y>
+     </hint>
+     <hint type="destinationlabel">
+-     <x>206</x>
+-     <y>294</y>
++     <x>467</x>
++     <y>249</y>
+     </hint>
+    </hints>
+   </connection>
+diff --git a/src/gui/mainwindow.cpp b/src/gui/mainwindow.cpp
+index 4c62ba5d90..0b8b41ebab 100644
+--- a/src/gui/mainwindow.cpp
++++ b/src/gui/mainwindow.cpp
+@@ -1158,8 +1158,8 @@ void MainWindow::closeEvent(QCloseEvent *e)
+ #else
+     const bool goToSystrayOnExit = pref->closeToTray();
+     if (!m_forceExit && m_systrayIcon && goToSystrayOnExit && !this->isHidden()) {
+-        hide();
+-        e->accept();
++        e->ignore();
++        QTimer::singleShot(0, this, &QWidget::hide);
+         if (!pref->closeToTrayNotified()) {
+             showNotificationBaloon(tr("qBittorrent is closed to tray"), tr("This behavior can be changed in the settings. You won't be reminded again."));
+             pref->setCloseToTrayNotified(true);
+diff --git a/src/gui/optionsdialog.cpp b/src/gui/optionsdialog.cpp
+index 45f552d17c..ac2b84b086 100644
+--- a/src/gui/optionsdialog.cpp
++++ b/src/gui/optionsdialog.cpp
+@@ -304,7 +304,7 @@ OptionsDialog::OptionsDialog(QWidget *parent)
+         .arg(tr("Supported parameters (case sensitive):")
+             , tr("%N: Torrent name")
+             , tr("%L: Category")
+-            , tr("%G: Tags (seperated by comma)")
++            , tr("%G: Tags (separated by comma)")
+             , tr("%F: Content path (same as root path for multifile torrent)")
+             , tr("%R: Root path (first torrent subdirectory path)")
+             , tr("%D: Save path")
+diff --git a/src/gui/properties/speedplotview.cpp b/src/gui/properties/speedplotview.cpp
+index 8dee762dfd..d5a20f70f8 100644
+--- a/src/gui/properties/speedplotview.cpp
++++ b/src/gui/properties/speedplotview.cpp
+@@ -42,14 +42,20 @@ namespace
+         MIN1_SEC = 60,
+         MIN5_SEC = 5 * 60,
+         MIN30_SEC = 30 * 60,
+-        HOUR6_SEC = 6 * 60 * 60
++        HOUR6_SEC = 6 * 60 * 60,
++        HOUR12_SEC = 12 * 60 * 60,
++        HOUR24_SEC = 24 * 60 * 60
+     };
+ 
+     const int MIN5_BUF_SIZE = 5 * 60;
+     const int MIN30_BUF_SIZE = 5 * 60;
+     const int HOUR6_BUF_SIZE = 5 * 60;
++    const int HOUR12_BUF_SIZE = 10 * 60;
++    const int HOUR24_BUF_SIZE = 10 * 60;
+     const int DIVIDER_30MIN = MIN30_SEC / MIN30_BUF_SIZE;
+     const int DIVIDER_6HOUR = HOUR6_SEC / HOUR6_BUF_SIZE;
++    const int DIVIDER_12HOUR = HOUR12_SEC / HOUR12_BUF_SIZE;
++    const int DIVIDER_24HOUR = HOUR24_SEC / HOUR24_BUF_SIZE;
+ 
+ 
+     // table of supposed nice steps for grid marks to get nice looking quarters of scale
+@@ -120,9 +126,9 @@ SpeedPlotView::Averager::Averager(int divider, boost::circular_buffer<PointData>
+ void SpeedPlotView::Averager::push(const PointData &pointData)
+ {
+     // Accumulator overflow will be hit in worst case on longest used averaging span,
+-    // defined by divider value. Maximum divider is DIVIDER_6HOUR = 72
+-    // Using int32 for accumulator we get overflow when transfer speed reaches 2^31/72 ~~ 28.4 MBytes/s.
+-    // With quint64 this speed limit is 2^64/72 ~~ 228 PBytes/s.
++    // defined by divider value. Maximum divider is DIVIDER_24HOUR = 144
++    // Using int32 for accumulator we get overflow when transfer speed reaches 2^31/144 ~~ 14.2 MBytes/s.
++    // With quint64 this speed limit is 2^64/144 ~~ 114 PBytes/s.
+     // This speed is inaccessible to an ordinary user.
+     m_accumulator.x += pointData.x;
+     for (int id = UP; id < NB_GRAPHS; ++id)
+@@ -149,8 +155,13 @@ SpeedPlotView::SpeedPlotView(QWidget *parent)
+     , m_data5Min(MIN5_BUF_SIZE)
+     , m_data30Min(MIN30_BUF_SIZE)
+     , m_data6Hour(HOUR6_BUF_SIZE)
++    , m_data12Hour(HOUR12_BUF_SIZE)
++    , m_data24Hour(HOUR24_BUF_SIZE)
++    , m_currentData(&m_data5Min)
+     , m_averager30Min(DIVIDER_30MIN, m_data30Min)
+     , m_averager6Hour(DIVIDER_6HOUR, m_data6Hour)
++    , m_averager12Hour(DIVIDER_12HOUR, m_data12Hour)
++    , m_averager24Hour(DIVIDER_24HOUR, m_data24Hour)
+     , m_period(MIN5)
+     , m_viewablePointsCount(MIN5_SEC)
+ {
+@@ -196,24 +207,38 @@ void SpeedPlotView::pushPoint(const SpeedPlotView::PointData &point)
+     m_data5Min.push_back(point);
+     m_averager30Min.push(point);
+     m_averager6Hour.push(point);
++    m_averager12Hour.push(point);
++    m_averager24Hour.push(point);
+ }
+ 
+-void SpeedPlotView::setViewableLastPoints(TimePeriod period)
++void SpeedPlotView::setPeriod(const TimePeriod period)
+ {
+     m_period = period;
+ 
+     switch (period) {
+     case SpeedPlotView::MIN1:
+         m_viewablePointsCount = MIN1_SEC;
++        m_currentData = &m_data5Min;
+         break;
+     case SpeedPlotView::MIN5:
+         m_viewablePointsCount = MIN5_SEC;
++        m_currentData = &m_data5Min;
+         break;
+     case SpeedPlotView::MIN30:
+         m_viewablePointsCount = MIN30_BUF_SIZE;
++        m_currentData = &m_data30Min;
+         break;
+     case SpeedPlotView::HOUR6:
+         m_viewablePointsCount = HOUR6_BUF_SIZE;
++        m_currentData = &m_data6Hour;
++        break;
++    case SpeedPlotView::HOUR12:
++        m_viewablePointsCount = HOUR12_BUF_SIZE;
++        m_currentData = &m_data12Hour;
++        break;
++    case SpeedPlotView::HOUR24:
++        m_viewablePointsCount = HOUR24_BUF_SIZE;
++        m_currentData = &m_data24Hour;
+         break;
+     }
+ 
+@@ -225,22 +250,15 @@ void SpeedPlotView::replot()
+     if ((m_period == MIN1)
+         || (m_period == MIN5)
+         || ((m_period == MIN30) && m_averager30Min.isReady())
+-        || ((m_period == HOUR6) && m_averager6Hour.isReady()) )
++        || ((m_period == HOUR6) && m_averager6Hour.isReady())
++        || ((m_period == HOUR12) && m_averager12Hour.isReady())
++        || ((m_period == HOUR24) && m_averager24Hour.isReady()) )
+         viewport()->update();
+ }
+ 
+ boost::circular_buffer<SpeedPlotView::PointData> &SpeedPlotView::getCurrentData()
+ {
+-    switch (m_period) {
+-    case SpeedPlotView::MIN1:
+-    case SpeedPlotView::MIN5:
+-    default:
+-        return m_data5Min;
+-    case SpeedPlotView::MIN30:
+-        return m_data30Min;
+-    case SpeedPlotView::HOUR6:
+-        return m_data6Hour;
+-    }
++    return *m_currentData;
+ }
+ 
+ quint64 SpeedPlotView::maxYValue()
+@@ -309,11 +327,11 @@ void SpeedPlotView::paintEvent(QPaintEvent *)
+     painter.drawLine(fullRect.left(), rect.top() + 0.75 * rect.height(), rect.right(), rect.top() + 0.75 * rect.height());
+     painter.drawLine(fullRect.left(), rect.bottom(), rect.right(), rect.bottom());
+ 
+-    painter.drawLine(rect.left(), fullRect.top(), rect.left(), fullRect.bottom());
+-    painter.drawLine(rect.left() + 0.2 * rect.width(), fullRect.top(), rect.left() + 0.2 * rect.width(), fullRect.bottom());
+-    painter.drawLine(rect.left() + 0.4 * rect.width(), fullRect.top(), rect.left() + 0.4 * rect.width(), fullRect.bottom());
+-    painter.drawLine(rect.left() + 0.6 * rect.width(), fullRect.top(), rect.left() + 0.6 * rect.width(), fullRect.bottom());
+-    painter.drawLine(rect.left() + 0.8 * rect.width(), fullRect.top(), rect.left() + 0.8 * rect.width(), fullRect.bottom());
++    const int TIME_AXIS_DIVISIONS = 6;
++    for (int i = 0; i < TIME_AXIS_DIVISIONS; ++i) {
++        const int x = rect.left() + (i * rect.width()) / TIME_AXIS_DIVISIONS;
++        painter.drawLine(x, fullRect.top(), x, fullRect.bottom());
++    }
+ 
+     // Set antialiasing for graphs
+     painter.setRenderHints(QPainter::Antialiasing | QPainter::HighQualityAntialiasing);
+diff --git a/src/gui/properties/speedplotview.h b/src/gui/properties/speedplotview.h
+index 637282980e..acdfbc72e6 100644
+--- a/src/gui/properties/speedplotview.h
++++ b/src/gui/properties/speedplotview.h
+@@ -64,7 +64,9 @@ class SpeedPlotView : public QGraphicsView
+         MIN1 = 0,
+         MIN5,
+         MIN30,
+-        HOUR6
++        HOUR6,
++        HOUR12,
++        HOUR24
+     };
+ 
+     struct PointData
+@@ -76,7 +78,7 @@ class SpeedPlotView : public QGraphicsView
+     explicit SpeedPlotView(QWidget *parent = nullptr);
+ 
+     void setGraphEnable(GraphID id, bool enable);
+-    void setViewableLastPoints(TimePeriod period);
++    void setPeriod(TimePeriod period);
+ 
+     void pushPoint(const PointData &point);
+ 
+@@ -116,8 +118,13 @@ class SpeedPlotView : public QGraphicsView
+     boost::circular_buffer<PointData> m_data5Min;
+     boost::circular_buffer<PointData> m_data30Min;
+     boost::circular_buffer<PointData> m_data6Hour;
++    boost::circular_buffer<PointData> m_data12Hour;
++    boost::circular_buffer<PointData> m_data24Hour;
++    boost::circular_buffer<PointData> *m_currentData;
+     Averager m_averager30Min;
+     Averager m_averager6Hour;
++    Averager m_averager12Hour;
++    Averager m_averager24Hour;
+ 
+     QMap<GraphID, GraphProperties> m_properties;
+ 
+diff --git a/src/gui/properties/speedwidget.cpp b/src/gui/properties/speedwidget.cpp
+index 754211569c..438ec5272a 100644
+--- a/src/gui/properties/speedwidget.cpp
++++ b/src/gui/properties/speedwidget.cpp
+@@ -72,6 +72,8 @@ SpeedWidget::SpeedWidget(PropertiesWidget *parent)
+     m_periodCombobox->addItem(tr("5 Minutes"));
+     m_periodCombobox->addItem(tr("30 Minutes"));
+     m_periodCombobox->addItem(tr("6 Hours"));
++    m_periodCombobox->addItem(tr("12 Hours"));
++    m_periodCombobox->addItem(tr("24 Hours"));
+ 
+     connect(m_periodCombobox, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged)
+         , this, &SpeedWidget::onPeriodChange);
+@@ -154,7 +156,7 @@ void SpeedWidget::update()
+ 
+ void SpeedWidget::onPeriodChange(int period)
+ {
+-    m_plot->setViewableLastPoints(static_cast<SpeedPlotView::TimePeriod>(period));
++    m_plot->setPeriod(static_cast<SpeedPlotView::TimePeriod>(period));
+ }
+ 
+ void SpeedWidget::onGraphChange(int id)
+diff --git a/src/webui/webapplication.cpp b/src/webui/webapplication.cpp
+index a4a2627345..599d694f7b 100644
+--- a/src/webui/webapplication.cpp
++++ b/src/webui/webapplication.cpp
+@@ -526,20 +526,10 @@ Http::Response WebApplication::processRequest(const Http::Request &request, cons
+     m_request = request;
+     m_env = env;
+     m_params.clear();
++
+     if (m_request.method == Http::METHOD_GET) {
+-        // Parse GET parameters
+-        using namespace Utils::ByteArray;
+-        for (const QByteArray &param : asConst(splitToViews(m_request.query, "&"))) {
+-            const int sepPos = param.indexOf('=');
+-            if (sepPos <= 0) continue; // ignores params without name
+-
+-            const QByteArray nameComponent = midView(param, 0, sepPos);
+-            const QByteArray valueComponent = midView(param, (sepPos + 1));
+-
+-            const QString paramName = QString::fromUtf8(QByteArray::fromPercentEncoding(nameComponent));
+-            const QString paramValue = QString::fromUtf8(QByteArray::fromPercentEncoding(valueComponent));
+-            m_params[paramName] = paramValue;
+-        }
++        for (auto iter = m_request.query.cbegin(); iter != m_request.query.cend(); ++iter)
++            m_params[iter.key()] = QString::fromUtf8(iter.value());
+     }
+     else {
+         m_params = m_request.posts;
+diff --git a/src/webui/www/private/download.html b/src/webui/www/private/download.html
+index 771c777f3c..cffd26781b 100644
+--- a/src/webui/www/private/download.html
++++ b/src/webui/www/private/download.html
+@@ -114,18 +114,20 @@ <h2 class="vcenter">QBT_TR(Download Torrents from their URLs or Magnet links)QBT
+                     </tr>
+                     <tr>
+                         <td>
+-                            <label for="dlLimit">QBT_TR(Limit download rate)QBT_TR[CONTEXT=HttpServer]</label>
++                            <label for="dlLimitText">QBT_TR(Limit download rate)QBT_TR[CONTEXT=HttpServer]</label>
+                         </td>
+                         <td>
+-                            <input type="text" id="dlLimit" name="dlLimit" style="width: 16em;" placeholder="Bytes/s" />
++                            <input type="hidden" id="dlLimitHidden" name="dlLimit" />
++                            <input type="text" id="dlLimitText" style="width: 16em;" placeholder="KiB/s" />
+                         </td>
+                     </tr>
+                     <tr>
+                         <td>
+-                            <label for="upLimit">QBT_TR(Limit upload rate)QBT_TR[CONTEXT=HttpServer]</label>
++                            <label for="upLimitText">QBT_TR(Limit upload rate)QBT_TR[CONTEXT=HttpServer]</label>
+                         </td>
+                         <td>
+-                            <input type="text" id="upLimit" name="upLimit" style="width: 16em;" placeholder="Bytes/s" />
++                            <input type="hidden" id="upLimitHidden" name="upLimit" />
++                            <input type="text" id="upLimitText" style="width: 16em;" placeholder="KiB/s" />
+                         </td>
+                     </tr>
+                 </table>
+@@ -153,6 +155,9 @@ <h2 class="vcenter">QBT_TR(Download Torrents from their URLs or Magnet links)QBT
+             $('startTorrentHidden').value = $('startTorrent').checked ? 'false' : 'true';
+             $('rootFolderHidden').value = $('rootFolder').checked ? 'true' : 'false';
+ 
++            $('dlLimitHidden').value = $('dlLimitText').value.toInt() * 1024;
++            $('upLimitHidden').value = $('upLimitText').value.toInt() * 1024;
++
+             $('download_spinner').style.display = "block";
+             submitted = true;
+         });
+diff --git a/src/webui/www/private/preferences_content.html b/src/webui/www/private/preferences_content.html
+index 139c6cef31..77ec532f81 100644
+--- a/src/webui/www/private/preferences_content.html
++++ b/src/webui/www/private/preferences_content.html
+@@ -214,7 +214,7 @@
+             <ul>
+                 <li>QBT_TR(%N: Torrent name)QBT_TR[CONTEXT=OptionsDialog]</li>
+                 <li>QBT_TR(%L: Category)QBT_TR[CONTEXT=OptionsDialog]</li>
+-                <li>QBT_TR(%G: Tags (seperated by comma))QBT_TR[CONTEXT=OptionsDialog]</li>
++                <li>QBT_TR(%G: Tags (separated by comma))QBT_TR[CONTEXT=OptionsDialog]</li>
+                 <li>QBT_TR(%F: Content path (same as root path for multifile torrent))QBT_TR[CONTEXT=OptionsDialog]</li>
+                 <li>QBT_TR(%R: Root path (first torrent subdirectory path))QBT_TR[CONTEXT=OptionsDialog]</li>
+                 <li>QBT_TR(%D: Save path)QBT_TR[CONTEXT=OptionsDialog]</li>
+diff --git a/src/webui/www/private/upload.html b/src/webui/www/private/upload.html
+index d89d3b6696..5b4dded3ad 100644
+--- a/src/webui/www/private/upload.html
++++ b/src/webui/www/private/upload.html
+@@ -102,18 +102,20 @@
+                 </tr>
+                 <tr>
+                     <td>
+-                        <label for="dlLimit">QBT_TR(Limit download rate)QBT_TR[CONTEXT=HttpServer]</label>
++                        <label for="dlLimitText">QBT_TR(Limit download rate)QBT_TR[CONTEXT=HttpServer]</label>
+                     </td>
+                     <td>
+-                        <input type="text" id="dlLimit" name="dlLimit" style="width: 16em;" placeholder="Bytes/s" />
++                        <input type="hidden" id="dlLimitHidden" name="dlLimit" />
++                        <input type="text" id="dlLimitText" style="width: 16em;" placeholder="KiB/s" />
+                     </td>
+                 </tr>
+                 <tr>
+                     <td>
+-                        <label for="upLimit">QBT_TR(Limit upload rate)QBT_TR[CONTEXT=HttpServer]</label>
++                        <label for="upLimitText">QBT_TR(Limit upload rate)QBT_TR[CONTEXT=HttpServer]</label>
+                     </td>
+                     <td>
+-                        <input type="text" id="upLimit" name="upLimit" style="width: 16em;" placeholder="Bytes/s" />
++                        <input type="hidden" id="upLimitHidden" name="upLimit" />
++                        <input type="text" id="upLimitText" style="width: 16em;" placeholder="KiB/s" />
+                     </td>
+                 </tr>
+             </table>
+@@ -129,6 +131,9 @@
+             $('startTorrentHidden').value = $('startTorrent').checked ? 'false' : 'true';
+             $('rootFolderHidden').value = $('rootFolder').checked ? 'true' : 'false';
+ 
++            $('dlLimitHidden').value = $('dlLimitText').value.toInt() * 1024;
++            $('upLimitHidden').value = $('upLimitText').value.toInt() * 1024;
++
+             $('upload_spinner').style.display = "block";
+             submitted = true;
+         });
