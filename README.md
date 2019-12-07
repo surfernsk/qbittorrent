@@ -1,6 +1,6 @@
 # personal qbittorrent rpm source reposirory
 
-Add Fedora repository (Copr fedora repository 26/27/28):
+Add Fedora repository (Copr fedora repository 29/30/31):
 ```
 sudo dnf copr enable surfernsk/Personal_repos
 ```
