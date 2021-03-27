@@ -1,6 +1,6 @@
 Name: qbittorrent
 Summary:  A Bittorrent Client
-Version:  4.3.3
+Version:  4.3.4.1
 Epoch:    1
 Release:  1%{?dist}
 License:  GPLv2+
@@ -11,9 +11,9 @@ Source1:  qbittorrent-nox.README
 BuildRequires: systemd
 BuildRequires: boost-devel >= 1.60
 BuildRequires: asio-devel
-BuildRequires: rb_libtorrent-devel >= 1.1.4
+BuildRequires: rb_libtorrent-devel >= 1.2.12
 BuildRequires: GeoIP-devel
-BuildRequires: pkgconfig(Qt5Core) >= 5.5.1
+BuildRequires: pkgconfig(Qt5Core) >= 5.12
 BuildRequires: pkgconfig(Qt5Gui)
 BuildRequires: pkgconfig(Qt5Svg)
 BuildRequires: qt5-linguist
@@ -142,6 +142,11 @@ fi
 
 
 %changelog
+* Fri Mar 26 2021 Evgeny Lensky <surfernsk@gmail.com> - 4.3.4.1
+- release 4.3.4.1
+- Raise minimum libtorrent version to 1.2.12 (glassez)
+- Raise minimum Qt version to 5.12 (glassez)
+
 * Fri Jan 22 2021 Evgeny Lensky <surfernsk@gmail.com> - 4.3.3-1
 - release 4.3.3
 
