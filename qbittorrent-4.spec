@@ -1,6 +1,6 @@
 Name: qbittorrent
 Summary:  A Bittorrent Client
-Version:  4.3.4.1
+Version:  4.3.5
 Epoch:    1
 Release:  1%{?dist}
 License:  GPLv2+
@@ -142,6 +142,9 @@ fi
 
 
 %changelog
+* Mon May 03 2021 Evgeny Lensky <surfernsk@gmail.com> - 4.3.5
+- release 4.3.5
+
 * Fri Mar 26 2021 Evgeny Lensky <surfernsk@gmail.com> - 4.3.4.1
 - release 4.3.4.1
 - Raise minimum libtorrent version to 1.2.12 (glassez)
