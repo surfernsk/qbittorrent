@@ -1,6 +1,6 @@
 Name: qbittorrent
 Summary:  A Bittorrent Client
-Version:  4.3.9
+Version:  4.4.0
 Epoch:    1
 Release:  1%{?dist}
 License:  GPLv2+
@@ -128,6 +128,7 @@ fi
 %{_metainfodir}/org.qbittorrent.qBittorrent.appdata.xml
 %{_datadir}/applications/org.qbittorrent.qBittorrent.desktop
 %{_datadir}/icons/hicolor/*/apps/qbittorrent.png
+%{_datadir}/icons/hicolor/*/apps/qbittorrent.svg
 %{_datadir}/icons/hicolor/*/status/qbittorrent-tray.png
 %{_datadir}/icons/hicolor/*/status/qbittorrent-tray-dark.svg
 %{_datadir}/icons/hicolor/*/status/qbittorrent-tray-light.svg
@@ -142,6 +143,9 @@ fi
 
 
 %changelog
+* Mon Jan 10 2021 Evgeny Lensky <surfernsk@gmail.com> - 4.4.0-1
+- release 4.4.0
+
 * Sun Oct 31 2021 Evgeny Lensky <surfernsk@gmail.com> - 4.3.9-1
 - release 4.3.9
 
