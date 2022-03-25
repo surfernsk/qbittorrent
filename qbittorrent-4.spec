@@ -1,6 +1,6 @@
 Name: qbittorrent
 Summary:  A Bittorrent Client
-Version:  4.4.1
+Version:  4.4.2
 Epoch:    1
 Release:  1%{?dist}
 License:  GPLv2+
@@ -143,6 +143,9 @@ fi
 
 
 %changelog
+* Fri Mar 25 2022 Evgeny Lensky <surfernsk@gmail.com> - 4.4.2-1
+- release 4.4.2
+
 * Sat Feb 19 2022 Evgeny Lensky <surfernsk@gmail.com> - 4.4.1-1
 - release 4.4.1
 
