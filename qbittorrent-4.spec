@@ -1,6 +1,6 @@
 Name: qbittorrent
 Summary:  A Bittorrent Client
-Version:  4.4.2
+Version:  4.4.4
 Epoch:    1
 Release:  1%{?dist}
 License:  GPLv2+
@@ -11,7 +11,7 @@ Source1:  qbittorrent-nox.README
 BuildRequires: systemd
 BuildRequires: boost-devel >= 1.60
 BuildRequires: asio-devel
-BuildRequires: rb_libtorrent-devel >= 1.2.12
+BuildRequires: rb_libtorrent-devel >= 2.0
 BuildRequires: GeoIP-devel
 BuildRequires: pkgconfig(Qt5Core) >= 5.12
 BuildRequires: pkgconfig(Qt5Gui)
@@ -143,6 +143,10 @@ fi
 
 
 %changelog
+* Fri Aug 26 2022 Evgeny Lensky <surfernsk@gmail.com> - 4.4.4-1
+- release 4.4.4
+- switching to rb_libtorrent >=2
+
 * Fri Mar 25 2022 Evgeny Lensky <surfernsk@gmail.com> - 4.4.2-1
 - release 4.4.2
 
