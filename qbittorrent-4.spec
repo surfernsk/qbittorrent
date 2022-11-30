@@ -1,6 +1,6 @@
 Name: qbittorrent
 Summary:  A Bittorrent Client
-Version:  4.4.5
+Version:  4.5.0
 Epoch:    1
 Release:  1%{?dist}
 License:  GPLv2+
@@ -122,7 +122,7 @@ fi
 
 
 %files
-%doc AUTHORS Changelog COPYING NEWS README.md TODO
+%doc AUTHORS Changelog COPYING README.md COPYING COPYING.GPLv2 COPYING.GPLv3
 %doc %{_mandir}/man1/%{name}.1.gz
 %{_bindir}/qbittorrent
 %{_metainfodir}/org.qbittorrent.qBittorrent.appdata.xml
@@ -133,16 +133,18 @@ fi
 %{_datadir}/icons/hicolor/*/status/qbittorrent-tray-dark.svg
 %{_datadir}/icons/hicolor/*/status/qbittorrent-tray-light.svg
 %{_datadir}/icons/hicolor/*/status/qbittorrent-tray.svg
-%{_datadir}/pixmaps/qbittorrent.png
 
 %files nox
-%doc AUTHORS Changelog COPYING NEWS README.md TODO
+%doc AUTHORS Changelog COPYING README.md COPYING COPYING.GPLv2 COPYING.GPLv3
 %doc %{_mandir}/man1/%{name}-nox.1.gz
 %{_unitdir}/%{name}-nox@.service
 %{_bindir}/qbittorrent-nox
 
 
 %changelog
+* Wed Nov 30 2022 Evgeny Lensky <surfernsk@gmail.com> - 4.5.0-1
+- release 4.5.0
+
 * Mon Sep 05 2022 Evgeny Lensky <surfernsk@gmail.com> - 4.4.5-1
 - release 4.4.5
 
